@@ -1,0 +1,2071 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Nino AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: hidden; 
+            background: #E8EEF3;
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        canvas { 
+            display: block; 
+            width: 100vw; 
+            height: 100vh; 
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* --- MANGA SPEECH BUBBLE (LADO IZQUIERDO) --- */
+        .manga-container {
+            position: fixed;
+            left: 5vw;
+            top: 22vh;
+            max-width: 360px;
+            min-width: 250px;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .user-whisper {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            color: #5856D6;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            opacity: 0;
+            transform: translateY(6px);
+            transition: all 0.3s ease;
+        }
+        .user-whisper.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .manga-bubble {
+            position: relative;
+            background: #FFFFFF;
+            border: 3px solid #1C1C1E;
+            border-radius: 26px;
+            padding: 20px 22px;
+            box-shadow: 6px 6px 0px #1C1C1E;
+            animation: mangaPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: auto;
+        }
+
+        /* Manga Tail apuntando hacia Nino */
+        .manga-bubble::after {
+            content: '';
+            position: absolute;
+            right: -16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 10px solid transparent;
+            border-bottom: 10px solid transparent;
+            border-left: 18px solid #1C1C1E;
+        }
+        .manga-bubble::before {
+            content: '';
+            position: absolute;
+            right: -12px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 0;
+            height: 0;
+            border-top: 7px solid transparent;
+            border-bottom: 7px solid transparent;
+            border-left: 14px solid #FFFFFF;
+            z-index: 1;
+        }
+
+        .manga-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        .manga-tag {
+            background: #FF3366;
+            color: #FFFFFF;
+            font-family: 'Bangers', cursive, sans-serif;
+            font-size: 14px;
+            letter-spacing: 1px;
+            padding: 2px 10px;
+            border-radius: 8px;
+            border: 2px solid #1C1C1E;
+            box-shadow: 2px 2px 0px #1C1C1E;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .manga-tag:hover {
+            transform: scale(1.06) rotate(-2deg);
+            background: #FF1A53;
+            box-shadow: 3px 3px 0px #1C1C1E;
+        }
+        .manga-tag:active {
+            transform: scale(0.96);
+        }
+        .manga-tag-switch-hint {
+            font-size: 10px;
+            opacity: 0.85;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 700;
+            background: rgba(0,0,0,0.2);
+            padding: 1px 4px;
+            border-radius: 4px;
+        }
+        .manga-status-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: #34C759;
+            box-shadow: 0 0 8px #34C759;
+        }
+        .manga-status-dot.speaking {
+            background: #FF3366;
+            box-shadow: 0 0 10px #FF3366;
+            animation: pulseDot 0.8s infinite alternate;
+        }
+
+        .manga-text {
+            font-size: 15px;
+            line-height: 1.5;
+            font-weight: 600;
+            color: #1C1C1E;
+            word-wrap: break-word;
+        }
+
+        @keyframes mangaPop {
+            0% { transform: scale(0.85) translateX(-10px); opacity: 0; }
+            100% { transform: scale(1) translateX(0); opacity: 1; }
+        }
+        @keyframes pulseDot {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            100% { transform: scale(1.3); opacity: 1; }
+        }
+
+        /* --- LIQUID GLASS BOTTOM BAR --- */
+        .glass-dock {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 90%;
+            max-width: 580px;
+            z-index: 20;
+        }
+
+        .glass-input-bar {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(24px) saturate(190%);
+            -webkit-backdrop-filter: blur(24px) saturate(190%);
+            border: 1.5px solid rgba(255, 255, 255, 0.75);
+            border-radius: 35px;
+            padding: 8px 14px 8px 20px;
+            box-shadow: 
+                0 15px 35px rgba(0, 0, 0, 0.08),
+                0 4px 10px rgba(0, 0, 0, 0.03),
+                inset 0 1px 2px rgba(255, 255, 255, 0.95);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .glass-input-bar:focus-within {
+            background: rgba(255, 255, 255, 0.65);
+            border-color: rgba(255, 51, 102, 0.5);
+            box-shadow: 
+                0 20px 40px rgba(255, 51, 102, 0.12),
+                0 6px 14px rgba(0, 0, 0, 0.05),
+                inset 0 1px 2px rgba(255, 255, 255, 1);
+        }
+
+        .glass-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 500;
+            color: #1C1C1E;
+            padding: 6px 0;
+            user-select: text;
+        }
+        .glass-input::placeholder {
+            color: rgba(60, 60, 67, 0.55);
+        }
+
+        .glass-send-btn {
+            background: #1C1C1E;
+            color: #FFFFFF;
+            border: none;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 15px;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        .glass-send-btn:hover {
+            background: #FF3366;
+            transform: scale(1.05);
+        }
+        .glass-send-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* --- LIQUID GLASS MIC BUTTON --- */
+        .glass-mic-btn {
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.55);
+            backdrop-filter: blur(24px) saturate(190%);
+            -webkit-backdrop-filter: blur(24px) saturate(190%);
+            border: 1.5px solid rgba(255, 255, 255, 0.85);
+            box-shadow: 
+                0 15px 35px rgba(0, 0, 0, 0.09),
+                0 4px 10px rgba(0, 0, 0, 0.04),
+                inset 0 1px 2px rgba(255, 255, 255, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 22px;
+            color: #1C1C1E;
+            transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+            position: relative;
+        }
+        .glass-mic-btn:hover {
+            transform: scale(1.06);
+            background: rgba(255, 255, 255, 0.75);
+            box-shadow: 
+                0 18px 40px rgba(0, 0, 0, 0.12),
+                inset 0 1px 2px rgba(255, 255, 255, 1);
+        }
+        .glass-mic-btn:active {
+            transform: scale(0.95);
+        }
+
+        .glass-mic-btn.recording {
+            background: rgba(255, 51, 102, 0.25);
+            border-color: rgba(255, 51, 102, 0.8);
+            color: #FF3366;
+            box-shadow: 
+                0 0 25px rgba(255, 51, 102, 0.5),
+                inset 0 0 12px rgba(255, 51, 102, 0.35);
+            animation: pulseWave 1.4s infinite;
+        }
+
+        @keyframes pulseWave {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 51, 102, 0.5); }
+            70% { transform: scale(1.08); box-shadow: 0 0 0 14px rgba(255, 51, 102, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 51, 102, 0); }
+        }
+
+        /* Loading indicator */
+        .dots-loading span {
+            animation: blinkDots 1.4s infinite both;
+            font-size: 18px;
+        }
+        @media (max-width: 768px) {
+            .manga-container {
+                left: 16px;
+                right: 16px;
+                top: 12vh;
+                max-width: calc(100vw - 32px);
+            }
+            .manga-bubble::after,
+            .manga-bubble::before {
+                display: none;
+            }
+            .glass-dock {
+                bottom: 18px;
+                width: 94%;
+            }
+        }
+
+        /* --- CONFIG TOGGLE BUTTON (LIQUID GLASS) --- */
+        .config-toggle-btn {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(24px) saturate(190%);
+            -webkit-backdrop-filter: blur(24px) saturate(190%);
+            border: 1.5px solid rgba(255, 255, 255, 0.75);
+            box-shadow: 
+                0 15px 35px rgba(0, 0, 0, 0.08),
+                0 4px 10px rgba(0, 0, 0, 0.03),
+                inset 0 1px 2px rgba(255, 255, 255, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 22px;
+            color: #1C1C1E;
+            z-index: 30;
+            transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .config-toggle-btn:hover {
+            transform: scale(1.06);
+            background: rgba(255, 255, 255, 0.65);
+            box-shadow: 
+                0 18px 40px rgba(0, 0, 0, 0.12),
+                inset 0 1px 2px rgba(255, 255, 255, 1);
+        }
+        .config-toggle-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* --- CONFIG PANEL (LIQUID GLASS & MODERN CARDS) --- */
+        .config-panel {
+            position: fixed;
+            top: 30px;
+            left: 30px;
+            width: 360px;
+            max-width: calc(100vw - 40px);
+            background: rgba(255, 255, 255, 0.65);
+            backdrop-filter: blur(30px) saturate(200%);
+            -webkit-backdrop-filter: blur(30px) saturate(200%);
+            border: 1.5px solid rgba(255, 255, 255, 0.85);
+            border-radius: 28px;
+            padding: 24px;
+            box-shadow: 
+                0 30px 60px rgba(0, 0, 0, 0.15),
+                0 4px 15px rgba(0, 0, 0, 0.05),
+                inset 0 1px 2px rgba(255, 255, 255, 0.95);
+            z-index: 40;
+            transform-origin: top left;
+            transform: scale(0);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .config-panel.open {
+            transform: scale(1);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .config-close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.06);
+            border: none;
+            font-size: 18px;
+            color: #1C1C1E;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+        .config-close-btn:hover {
+            background: #FF3366;
+            color: #FFFFFF;
+            transform: rotate(90deg);
+        }
+
+        .config-header {
+            margin-bottom: 20px;
+        }
+        .config-title {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 800;
+            color: #1C1C1E;
+            letter-spacing: -0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .config-subtitle {
+            margin: 4px 0 0 0;
+            font-size: 12px;
+            color: rgba(60, 60, 67, 0.65);
+            font-weight: 600;
+        }
+
+        /* Waifu Cards Grid */
+        .waifu-cards-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .waifu-card {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, 0.55);
+            border: 2px solid transparent;
+            border-radius: 18px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+        }
+        .waifu-card:hover {
+            background: rgba(255, 255, 255, 0.85);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+        }
+        .waifu-card.active {
+            background: #FFFFFF;
+            border-color: #FF3366;
+            box-shadow: 0 8px 24px rgba(255, 51, 102, 0.18);
+        }
+        .waifu-card-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            flex-shrink: 0;
+            background: linear-gradient(135deg, rgba(255, 51, 102, 0.15), rgba(255, 107, 107, 0.25));
+            border: 1px solid rgba(255, 51, 102, 0.2);
+            transition: transform 0.2s ease;
+        }
+        .waifu-card[data-waifu="miku"] .waifu-card-avatar {
+            background: linear-gradient(135deg, rgba(57, 197, 187, 0.2), rgba(0, 191, 165, 0.25));
+            border-color: rgba(57, 197, 187, 0.3);
+        }
+        .waifu-card.active[data-waifu="miku"] {
+            border-color: #39C5BB;
+            box-shadow: 0 8px 24px rgba(57, 197, 187, 0.25);
+        }
+        .waifu-card:hover .waifu-card-avatar {
+            transform: scale(1.08);
+        }
+        .waifu-card-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .waifu-card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #1C1C1E;
+            margin: 0 0 2px 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .waifu-card-tag {
+            font-size: 10px;
+            padding: 2px 7px;
+            border-radius: 6px;
+            font-weight: 700;
+            background: rgba(255, 51, 102, 0.12);
+            color: #FF3366;
+            text-transform: uppercase;
+        }
+        .waifu-card[data-waifu="miku"] .waifu-card-tag {
+            background: rgba(57, 197, 187, 0.15);
+            color: #159a91;
+        }
+        .waifu-card-role {
+            font-size: 12px;
+            color: rgba(60, 60, 67, 0.65);
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .waifu-card-check {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: #FF3366;
+            color: white;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .waifu-card[data-waifu="miku"] .waifu-card-check {
+            background: #39C5BB;
+        }
+        .waifu-card.active .waifu-card-check {
+            display: flex;
+        }
+
+        /* Details Box */
+        .waifu-detail-box {
+            background: rgba(255, 255, 255, 0.55);
+            border-radius: 18px;
+            padding: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+        }
+        .waifu-detail-header {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 800;
+            color: rgba(60, 60, 67, 0.5);
+            margin-bottom: 6px;
+        }
+        .waifu-desc {
+            margin: 0;
+            font-size: 12.5px;
+            line-height: 1.5;
+            color: #1C1C1E;
+            font-weight: 500;
+        }
+
+        /* --- PERFIL Y CUENTA --- */
+        .profile-toggle-btn {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255, 255, 255, 0.78);
+            background: rgba(255, 255, 255, 0.48);
+            backdrop-filter: blur(24px) saturate(190%);
+            -webkit-backdrop-filter: blur(24px) saturate(190%);
+            color: #1C1C1E;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08), inset 0 1px 2px rgba(255,255,255,.95);
+            cursor: pointer;
+            font-size: 21px;
+            z-index: 30;
+            transition: transform .25s cubic-bezier(.2,.8,.2,1), background .25s ease, opacity .2s ease;
+        }
+        .profile-toggle-btn:hover { transform: scale(1.06); background: rgba(255,255,255,.74); }
+        .profile-toggle-btn:active { transform: scale(.95); }
+        .profile-panel {
+            position: fixed;
+            top: 30px;
+            right: 30px;
+            width: 390px;
+            max-width: calc(100vw - 40px);
+            max-height: calc(100vh - 60px);
+            overflow-y: auto;
+            padding: 24px;
+            border: 1.5px solid rgba(255,255,255,.85);
+            border-radius: 28px;
+            background: rgba(255,255,255,.72);
+            backdrop-filter: blur(30px) saturate(200%);
+            -webkit-backdrop-filter: blur(30px) saturate(200%);
+            box-shadow: 0 30px 60px rgba(0,0,0,.15), inset 0 1px 2px rgba(255,255,255,.95);
+            z-index: 45;
+            transform-origin: top right;
+            transform: scale(.82) translateY(-10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all .3s cubic-bezier(.2,.8,.2,1);
+        }
+        .profile-panel.open { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
+        .profile-user-card, .profile-section {
+            background: rgba(255,255,255,.58);
+            border: 1px solid rgba(255,255,255,.82);
+            border-radius: 18px;
+            padding: 14px;
+            margin-top: 14px;
+        }
+        .profile-user-card { display: flex; align-items: center; gap: 12px; margin-top: 0; }
+        .profile-avatar { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; font-size: 20px; background: linear-gradient(135deg, #ffbed0, #ffd9a8); }
+        .profile-username { font-weight: 800; color: #1C1C1E; font-size: 15px; }
+        .profile-status { margin-top: 3px; color: #168d49; font-size: 11px; font-weight: 700; }
+        .profile-label { display: block; margin: 12px 0 6px; color: rgba(60,60,67,.68); font-size: 11px; font-weight: 800; letter-spacing: .55px; text-transform: uppercase; }
+        .profile-label:first-child { margin-top: 0; }
+        .profile-input, .profile-select {
+            width: 100%; border: 1px solid rgba(28,28,30,.1); outline: none; border-radius: 12px;
+            padding: 10px 12px; font: 600 12px 'Plus Jakarta Sans', sans-serif; color: #1C1C1E;
+            background: rgba(255,255,255,.9); transition: border-color .2s, box-shadow .2s;
+            user-select: text;
+        }
+        .profile-input:focus, .profile-select:focus { border-color: #FF3366; box-shadow: 0 0 0 3px rgba(255,51,102,.12); }
+        .profile-help { margin: 7px 0 0; color: rgba(60,60,67,.65); font-size: 11px; line-height: 1.45; }
+        .key-row { margin-top: 9px; }
+        .key-row label { display: flex; justify-content: space-between; margin: 0 0 5px; font-size: 11px; font-weight: 800; color: #1C1C1E; }
+        .key-row small { color: rgba(60,60,67,.52); font-weight: 700; }
+        .profile-actions { display: flex; gap: 9px; margin-top: 16px; }
+        .profile-btn { flex: 1; border: 0; padding: 11px 12px; border-radius: 13px; cursor: pointer; font: 800 12px 'Plus Jakarta Sans', sans-serif; transition: transform .2s, box-shadow .2s, background .2s; }
+        .profile-btn:hover { transform: translateY(-2px); }
+        .profile-save { color: #fff; background: #1C1C1E; box-shadow: 0 5px 12px rgba(0,0,0,.15); }
+        .profile-save:hover { background: #FF3366; }
+        .profile-logout { color: #d92051; background: rgba(255,51,102,.1); }
+        .profile-notice { min-height: 17px; margin: 9px 2px 0; font-size: 11px; font-weight: 700; color: #168d49; }
+        .profile-notice.error { color: #d92051; }
+
+        .auth-overlay {
+            position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+            padding: 20px; background: rgba(232,238,243,.72); backdrop-filter: blur(13px); -webkit-backdrop-filter: blur(13px);
+            opacity: 0; pointer-events: none; transition: opacity .35s ease;
+        }
+        .auth-overlay.visible { opacity: 1; pointer-events: auto; }
+        .auth-card {
+            width: min(390px, 100%); padding: 30px; border-radius: 30px; background: rgba(255,255,255,.78);
+            border: 1.5px solid rgba(255,255,255,.9); box-shadow: 0 28px 70px rgba(30,33,40,.2);
+            transform: translateY(14px) scale(.96); transition: transform .35s cubic-bezier(.2,.8,.2,1);
+        }
+        .auth-overlay.visible .auth-card { transform: translateY(0) scale(1); }
+        .auth-logo { width: 52px; height: 52px; display: grid; place-items: center; margin-bottom: 14px; border-radius: 17px; background: linear-gradient(135deg, #FF3366, #ff8e73); color: white; font-size: 24px; box-shadow: 5px 5px 0 #1C1C1E; }
+        .auth-title { margin: 0; color: #1C1C1E; font-size: 25px; font-weight: 800; letter-spacing: -.8px; }
+        .auth-subtitle { margin: 6px 0 20px; color: rgba(60,60,67,.65); font-size: 12px; font-weight: 600; line-height: 1.5; }
+        .auth-tabs { display: flex; padding: 4px; gap: 4px; border-radius: 13px; background: rgba(28,28,30,.07); margin-bottom: 16px; }
+        .auth-tab { flex: 1; padding: 9px; border: none; border-radius: 10px; background: transparent; color: rgba(28,28,30,.58); cursor: pointer; font: 800 12px 'Plus Jakarta Sans', sans-serif; transition: .2s; }
+        .auth-tab.active { color: #1C1C1E; background: #fff; box-shadow: 0 3px 8px rgba(0,0,0,.08); }
+        .auth-submit { width: 100%; margin-top: 17px; padding: 12px; border: none; border-radius: 14px; color: #fff; background: #1C1C1E; cursor: pointer; font: 800 13px 'Plus Jakarta Sans', sans-serif; transition: .2s; }
+        .auth-submit:hover { background: #FF3366; transform: translateY(-2px); box-shadow: 0 8px 17px rgba(255,51,102,.22); }
+        .auth-error { min-height: 17px; margin: 10px 2px 0; color: #d92051; font-size: 11px; font-weight: 700; }
+        @media (max-width: 768px) { .profile-toggle-btn { top: 18px; right: 18px; } .profile-panel { top: 18px; right: 18px; max-height: calc(100vh - 36px); } }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.167.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.167.0/examples/jsm/",
+                "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.1.1/lib/three-vrm.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <!-- Acceso y perfil de usuario -->
+    <button class="profile-toggle-btn" id="profile-toggle-btn" title="Mi perfil" aria-label="Abrir perfil">◉</button>
+    <aside class="profile-panel" id="profile-panel" aria-label="Panel de perfil">
+        <button class="config-close-btn" id="profile-close-btn" aria-label="Cerrar perfil">&times;</button>
+        <div class="config-header">
+            <h2 class="config-title">✦ Mi perfil</h2>
+            <p class="config-subtitle">Tus claves quedan vinculadas a esta cuenta.</p>
+        </div>
+        <div class="profile-user-card">
+            <div class="profile-avatar">✦</div>
+            <div><div class="profile-username" id="profile-username">Usuario</div><div class="profile-status">● Sesión activa</div></div>
+        </div>
+        <div class="profile-section">
+            <label class="profile-label" for="tts-provider-select">Motor de voz (TTS Provider)</label>
+            <select class="profile-select" id="tts-provider-select">
+                <option value="gemini" selected>Gemini 3.8 TTS (Voz emotiva nativa con tu API Key de Gemini)</option>
+                <option value="fish">Fish Audio (Voz clonada personalizada de Nino)</option>
+                <option value="edge">Edge TTS (Gratuito sin clave)</option>
+            </select>
+            <p class="profile-help">Elige el sintetizador principal. Si falla o no hay clave, el sistema usará el respaldo de forma automática.</p>
+        </div>
+        <div class="profile-section">
+            <label class="profile-label" for="active-gemini-slot">Clave Gemini en uso</label>
+            <select class="profile-select" id="active-gemini-slot">
+                <option value="1">Slot 1</option><option value="2">Slot 2</option><option value="3">Slot 3</option><option value="4">Slot 4</option><option value="5">Slot 5</option>
+            </select>
+            <p class="profile-help">Puedes alternar el slot activo cuando una clave alcance su cuota.</p>
+            <div id="gemini-key-list">
+                <div class="key-row"><label for="gemini-key-1">Gemini · Slot 1 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-1" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
+                <div class="key-row"><label for="gemini-key-2">Gemini · Slot 2 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-2" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
+                <div class="key-row"><label for="gemini-key-3">Gemini · Slot 3 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-3" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
+                <div class="key-row"><label for="gemini-key-4">Gemini · Slot 4 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-4" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
+                <div class="key-row"><label for="gemini-key-5">Gemini · Slot 5 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-5" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
+            </div>
+        </div>
+        <div class="profile-section">
+            <label class="profile-label" for="fish-key">Fish Audio · clave personal</label>
+            <input class="profile-input" id="fish-key" type="password" autocomplete="off" placeholder="Opcional">
+            <p class="profile-help">Requerida si eliges Fish Audio. Si no hay clave o falla, Nino responderá con Gemini TTS o Edge TTS.</p>
+        </div>
+        <div class="profile-actions"><button class="profile-btn profile-save" id="profile-save-btn">Guardar cambios</button><button class="profile-btn profile-logout" id="profile-logout-btn">Cerrar sesión</button></div>
+        <div class="profile-notice" id="profile-notice" role="status"></div>
+    </aside>
+
+    <div class="auth-overlay" id="auth-overlay" aria-hidden="true">
+        <form class="auth-card" id="auth-form">
+            <div class="auth-logo">✦</div>
+            <h1 class="auth-title">Nino AI</h1>
+            <p class="auth-subtitle" id="auth-subtitle">Inicia sesión para conversar y guardar tus claves privadas.</p>
+            <div class="auth-tabs"><button class="auth-tab active" type="button" data-auth-mode="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-mode="register">Crear cuenta</button></div>
+            <label class="profile-label" for="auth-username">Nombre de usuario</label>
+            <input class="profile-input" id="auth-username" autocomplete="username" required minlength="3" maxlength="32" placeholder="Tu nombre">
+            <label class="profile-label" for="auth-password">Contraseña</label>
+            <input class="profile-input" id="auth-password" type="password" autocomplete="current-password" required minlength="8" placeholder="Mínimo 8 caracteres">
+            <button class="auth-submit" id="auth-submit-btn" type="submit">Entrar</button>
+            <div class="auth-error" id="auth-error" role="alert"></div>
+        </form>
+    </div>
+
+    <!-- Botón Flotante para el Panel de Configuración -->
+    <button class="config-toggle-btn" id="config-toggle-btn" title="Seleccionar Waifu">👤</button>
+    
+    <!-- Panel Lateral de Configuración (Liquid Glass & Modern Cards) -->
+    <div class="config-panel" id="config-panel">
+        <button class="config-close-btn" id="config-close-btn">&times;</button>
+        <div class="config-header">
+            <h2 class="config-title">✨ Seleccionar Waifu</h2>
+            <p class="config-subtitle">Elige con quién deseas conversar hoy</p>
+        </div>
+
+        <div class="waifu-cards-grid">
+            <div class="waifu-card active" data-waifu="nino" id="card-nino">
+                <div class="waifu-card-avatar">🦋</div>
+                <div class="waifu-card-info">
+                    <div class="waifu-card-title">
+                        <span>Nino Nakano</span>
+                        <span class="waifu-card-tag">Tsundere</span>
+                    </div>
+                    <p class="waifu-card-role">Las Quintillizas Quintillizas</p>
+                </div>
+                <div class="waifu-card-check">✓</div>
+            </div>
+
+            <div class="waifu-card" data-waifu="miku" id="card-miku">
+                <div class="waifu-card-avatar">🎵</div>
+                <div class="waifu-card-info">
+                    <div class="waifu-card-title">
+                        <span>Hatsune Miku</span>
+                        <span class="waifu-card-tag">Idol Virtual</span>
+                    </div>
+                    <p class="waifu-card-role">Vocaloid Virtual Diva</p>
+                </div>
+                <div class="waifu-card-check">✓</div>
+            </div>
+        </div>
+
+        <div class="waifu-detail-box">
+            <div class="waifu-detail-header">Personalidad & Estilo</div>
+            <p id="waifu-desc-display" class="waifu-desc">Aunque tiene su característico toque tsundere y algo orgulloso, es dulce, atenta, cariñosa y cercana con quien habla.</p>
+        </div>
+    </div>
+
+    <!-- Bocadillo Manga a la Izquierda -->
+    <div class="manga-container">
+        <div class="user-whisper" id="user-whisper">Tú: ...</div>
+        <div class="manga-bubble" id="manga-bubble">
+            <div class="manga-header">
+                <span class="manga-tag" id="manga-tag" title="Haz clic para cambiar de Waifu">NINO NAKANO <span class="manga-tag-switch-hint">CAMBIAR ⟳</span></span>
+                <span class="manga-status-dot" id="status-dot"></span>
+            </div>
+            <div class="manga-text" id="nino-text">Tch, hola. ¿Qué quieres? Habla rápido.</div>
+        </div>
+    </div>
+
+    <!-- Liquid Glass Dock Inferior -->
+    <div class="glass-dock">
+        <div class="glass-input-bar">
+            <input type="text" class="glass-input" id="chat-input" placeholder="Escribe a Nino..." autocomplete="off">
+            <button class="glass-send-btn" id="send-btn" title="Enviar">➤</button>
+        </div>
+        <button class="glass-mic-btn" id="mic-btn" title="Hablar por micrófono">🎤</button>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { VRMLoaderPlugin } from '@pixiv/three-vrm';
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xE8EEF3);
+
+        const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
+        // Centrado frontal perfecto a la altura de los ojos/rostro del modelo (x: 0, y: 1.25)
+        camera.position.set(0, 1.28, 1.95);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        // Objetivo en el centro exacto del rostro (x: 0, y: 1.22)
+        controls.target.set(0, 1.22, 0);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.update();
+
+        const light = new THREE.DirectionalLight(0xffffff, 1.25);
+        light.position.set(1.5, 3.5, 2).normalize();
+        scene.add(light);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+
+        let currentVrm = undefined;
+        const loader = new GLTFLoader();
+        loader.register((parser) => new VRMLoaderPlugin(parser));
+
+        // ── Nombre de la waifu activa en la escena (sincronizado con la UI) ──
+        let activeWaifuAnim = 'nino';
+        window.setActiveWaifuAnim = function(name) { activeWaifuAnim = name; };
+
+        const waifuModels = {
+            nino: { file: 'nino_nakano.vrm', frontRotation: Math.PI },
+            miku: { file: 'hatsune_miku.vrm', frontRotation: 0 }
+        };
+
+        // ══════════════════════════════════════════════════════════════
+        //  WALK ENTRANCE — Entrada con variaciones por personalidad
+        // ══════════════════════════════════════════════════════════════
+        const walkEntrance = {
+            active: false,
+            progress: 0,
+            duration: 2.4,
+            startX: 2.2,
+            targetX: 0,
+            walkPortion: 0.72,
+            frontRotation: Math.PI,
+            entryRotation: Math.PI / 2,
+            bounceActive: false,
+            bounceProgress: 0,
+            waifuName: 'nino',
+
+            update(vrm, delta) {
+                if (!this.active || !vrm) return false;
+                const isNino = this.waifuName === 'nino';
+                const isMiku = this.waifuName === 'miku';
+
+                this.progress = Math.min(1, this.progress + delta / this.duration);
+                const walkProgress = Math.min(1, this.progress / this.walkPortion);
+                const turnProgress = Math.max(0, (this.progress - this.walkPortion) / (1 - this.walkPortion));
+
+                // Nino: entrada decidida con desaceleración brusca al llegar (tsundere no se detiene suavemente)
+                // Miku: curva más suave con pequeño overshoot (idol entusiasta)
+                const eased = isNino
+                    ? 1 - Math.pow(1 - walkProgress, 2.2)
+                    : 1 - Math.pow(1 - walkProgress, 3);
+
+                let posX = THREE.MathUtils.lerp(this.startX, this.targetX, eased);
+                // Miku: ligero overshoot al llegar — rebasa un poquito y vuelve
+                if (isMiku && walkProgress > 0.85) {
+                    posX -= Math.sin((walkProgress - 0.85) / 0.15 * Math.PI) * 0.05;
+                }
+
+                // Giro hacia cámara: ease in-out cuadrático
+                const turnEased = turnProgress < 0.5
+                    ? 2 * turnProgress * turnProgress
+                    : 1 - Math.pow(-2 * turnProgress + 2, 2) / 2;
+
+                const stepsPerCycle = isMiku ? 6.5 : 5.5;
+                const phase = walkProgress * Math.PI * stepsPerCycle;
+                const stride = Math.sin(phase);
+                const humanoid = vrm.humanoid;
+                const sign = vrm._isVRM1 ? -1 : 1;
+
+                vrm.scene.position.x = posX;
+                // Miku sube más en cada paso (más energética)
+                vrm.scene.position.y = Math.abs(stride) * (isMiku ? 0.027 : 0.016);
+                vrm.scene.rotation.y = THREE.MathUtils.lerp(this.entryRotation, this.frontRotation, turnEased);
+
+                if (humanoid) {
+                    const leftUpperArm  = humanoid.getNormalizedBoneNode('leftUpperArm');
+                    const rightUpperArm = humanoid.getNormalizedBoneNode('rightUpperArm');
+                    const leftUpperLeg  = humanoid.getNormalizedBoneNode('leftUpperLeg');
+                    const rightUpperLeg = humanoid.getNormalizedBoneNode('rightUpperLeg');
+                    const leftLowerLeg  = humanoid.getNormalizedBoneNode('leftLowerLeg');
+                    const rightLowerLeg = humanoid.getNormalizedBoneNode('rightLowerLeg');
+
+                    const armSwing  = isMiku ? 0.42 : 0.28;
+                    const legSwing  = isMiku ? 0.46 : 0.36;
+                    const kneeSwing = isMiku ? 0.58 : 0.44;
+
+                    if (leftUpperArm)  { leftUpperArm.rotation.z  = sign * 1.38; leftUpperArm.rotation.x  = -stride * armSwing; }
+                    if (rightUpperArm) { rightUpperArm.rotation.z = -sign * 1.38; rightUpperArm.rotation.x = stride * armSwing; }
+                    if (leftUpperLeg)  leftUpperLeg.rotation.x  = stride * legSwing;
+                    if (rightUpperLeg) rightUpperLeg.rotation.x = -stride * legSwing;
+                    if (leftLowerLeg)  leftLowerLeg.rotation.x  = Math.max(0, -stride) * kneeSwing;
+                    if (rightLowerLeg) rightLowerLeg.rotation.x = Math.max(0, stride) * kneeSwing;
+                }
+
+                if (this.progress >= 1) {
+                    vrm.scene.position.set(this.targetX, 0, 0);
+                    this.active = false;
+                    if (isMiku) { this.bounceActive = true; this.bounceProgress = 0; }
+                }
+                return true;
+            },
+
+            updateBounce(vrm, delta) {
+                if (!this.bounceActive || !vrm) return;
+                this.bounceProgress += delta;
+                const t = this.bounceProgress / 0.6;
+                if (t >= 1) { this.bounceActive = false; vrm.scene.position.y = 0; return; }
+                // Rebote amortiguado de Miku al llegar
+                const bounce = Math.sin(t * Math.PI * 2.2) * (1 - t) * 0.06;
+                vrm.scene.position.y = Math.max(0, bounce);
+            },
+
+            reset() {
+                this.active = false; this.progress = 0;
+                this.bounceActive = false; this.bounceProgress = 0;
+            }
+        };
+
+        function cargarWaifu(waifuName) {
+            if (currentVrm) {
+                scene.remove(currentVrm.scene);
+                currentVrm.scene.traverse((object) => {
+                    if (object.isMesh) {
+                        object.geometry.dispose();
+                        if (Array.isArray(object.material)) {
+                            object.material.forEach((m) => m.dispose());
+                        } else {
+                            object.material.dispose();
+                        }
+                    }
+                });
+                currentVrm = undefined;
+                walkEntrance.reset();
+                hairPhysics.reset();
+                clothPhysics.reset();
+                gestureSystem.reset();
+                expressionController.reset();
+                animate._warned = false;
+            }
+
+            const modelConfig = waifuModels[waifuName] || waifuModels.nino;
+            const modelFile = modelConfig.file;
+            loader.load(
+                modelFile,
+                (gltf) => {
+                    const vrm = gltf.userData.vrm;
+                    currentVrm = vrm;
+                    scene.add(vrm.scene);
+
+                    // Entra mirando hacia la izquierda (dirección del recorrido).
+                    // Al llegar, la secuencia usa frontRotation para mirar a cámara.
+                    walkEntrance.frontRotation = modelConfig.frontRotation;
+                    walkEntrance.entryRotation = modelConfig.frontRotation - Math.PI / 2;
+                    walkEntrance.waifuName = waifuName;
+                    // Nino: 2.3s decidida. Miku: 2.7s con más pasos y energía.
+                    walkEntrance.duration = waifuName === 'nino' ? 2.3 : 2.7;
+                    vrm.scene.rotation.y = walkEntrance.entryRotation;
+
+                    // Detectar si el modelo utiliza convención VRM 1.0 o VRM 0.0
+                    const isVRM1 = (vrm.meta && vrm.meta.metaVersion === '1') || !!(gltf.parser.json?.extensions?.VRMC_vrm);
+                    vrm._isVRM1 = isVRM1;
+
+                    // Posicionar inicialmente a la derecha para la animación de entrada caminando
+                    vrm.scene.position.set(walkEntrance.startX, 0, 0);
+
+                    // Estado de animación de entrada caminando desde la derecha
+                    walkEntrance.active = true;
+                    walkEntrance.progress = 0;
+
+                    if (vrm.humanoid) {
+                        // Pose de reposo natural: brazos caídos a los lados con una ligera separación
+                        const LUA0 = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
+                        const RUA0 = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
+                        const LLA0 = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
+                        const RLA0 = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
+                        const sign = isVRM1 ? -1 : 1;
+                        if (LUA0) LUA0.rotation.z = sign * 1.38;
+                        if (RUA0) RUA0.rotation.z = -sign * 1.38;
+                        if (LLA0) LLA0.rotation.z = sign * 0.05;
+                        if (RLA0) RLA0.rotation.z = -sign * 0.05;
+                    }
+                    hairPhysics.init(vrm);
+                    clothPhysics.init(vrm);
+                },
+                () => {},
+                (err) => console.error('Error cargando VRM:', err)
+            );
+        }
+
+        window.cargarWaifuEnEscena = cargarWaifu;
+
+        // ══════════════════════════════════════════════════════════════
+        //  EXPRESSION CONTROLLER — Blending suave de expresiones
+        // ══════════════════════════════════════════════════════════════
+        const expressionController = {
+            _targets: {},
+            _current: {},
+            set(name, value, speed = 8) {
+                this._targets[name] = { value: Math.max(0, Math.min(1, value)), speed };
+                if (this._current[name] === undefined) this._current[name] = 0;
+            },
+            update(vrm, delta) {
+                if (!vrm || !vrm.expressionManager) return;
+                for (const name in this._targets) {
+                    const t = this._targets[name];
+                    const cur = this._current[name] || 0;
+                    const next = cur + (t.value - cur) * Math.min(1, delta * t.speed);
+                    this._current[name] = next;
+                    try { vrm.expressionManager.setValue(name, next); } catch(e) {}
+                    // Aliases VRM0 ↔ VRM1
+                    const alias = { aa:'a', ih:'i', ou:'u', ee:'e', oh:'o', happy:'joy' }[name];
+                    if (alias) try { vrm.expressionManager.setValue(alias, next); } catch(e) {}
+                }
+            },
+            reset() { this._targets = {}; this._current = {}; }
+        };
+
+        // ══════════════════════════════════════════════════════════════
+        //  HAIR PHYSICS — Spring bones procedurales para el pelo
+        // ══════════════════════════════════════════════════════════════
+        const hairPhysics = {
+            chains: [],
+            headPrevRotY: 0,
+            headPrevRotX: 0,
+            init(vrm) {
+                this.chains = [];
+                if (!vrm) return;
+                const keys = ['hair','twintail','ahoge','braid','pigtail','ponytail','bang','fringe','lock','strand'];
+                vrm.scene.traverse((node) => {
+                    // VRoid exporta los huesos secundarios (pelo/ropa) con el
+                    // prefijo "J_Sec_" y no siempre como node.isBone === true,
+                    // así que no descartamos por eso: solo miramos el nombre.
+                    if (keys.some(k => node.name.toLowerCase().includes(k))) {
+                        this.chains.push({
+                            bone: node,
+                            offset: new THREE.Vector3(),
+                            vel: new THREE.Vector3(),
+                            stiffness: 0.10 + Math.random() * 0.10,
+                            damping: 0.84,
+                            gravity: 0.0015
+                        });
+                    }
+                });
+            },
+            update(vrm, delta, headNode) {
+                if (!headNode || this.chains.length === 0) return;
+                const dY = (headNode.rotation.y - this.headPrevRotY) / Math.max(delta, 0.001);
+                const dX = (headNode.rotation.x - this.headPrevRotX) / Math.max(delta, 0.001);
+                this.headPrevRotY = headNode.rotation.y;
+                this.headPrevRotX = headNode.rotation.x;
+                this.chains.forEach(c => {
+                    c.vel.add(c.offset.clone().multiplyScalar(-c.stiffness * delta * 60));
+                    c.vel.x -= dY * 0.003;
+                    c.vel.z += dX * 0.002;
+                    c.vel.y -= c.gravity;
+                    c.vel.multiplyScalar(c.damping);
+                    c.offset.add(c.vel);
+                    if (c.offset.length() > 0.08) c.offset.normalize().multiplyScalar(0.08);
+                    if (c.bone) {
+                        c.bone.rotation.z += c.offset.x * 0.45;
+                        c.bone.rotation.x += c.offset.z * 0.35;
+                    }
+                });
+            },
+            reset() { this.chains = []; this.headPrevRotY = 0; this.headPrevRotX = 0; }
+        };
+
+        // ══════════════════════════════════════════════════════════════
+        //  CLOTH PHYSICS — Inercia de ropa (falda, mangas, lazos)
+        // ══════════════════════════════════════════════════════════════
+        const clothPhysics = {
+            bones: [],
+            hipsPrevY: 0,
+            init(vrm) {
+                this.bones = [];
+                if (!vrm) return;
+                const keys = ['skirt','dress','frill','sleeve','ribbon','bow','coat','cape','cloth','robe','hem','tie','scarf'];
+                vrm.scene.traverse((node) => {
+                    if (keys.some(k => node.name.toLowerCase().includes(k))) {
+                        this.bones.push({
+                            bone: node,
+                            offset: new THREE.Vector3(),
+                            vel: new THREE.Vector3(),
+                            stiffness: 0.07,
+                            damping: 0.80,
+                            baseRX: node.rotation.x,
+                            baseRZ: node.rotation.z
+                        });
+                    }
+                });
+            },
+            update(vrm, delta, hipsNode, time) {
+                if (!hipsNode) return;
+                const angVelY = (hipsNode.rotation.y - this.hipsPrevY) / Math.max(delta, 0.001);
+                this.hipsPrevY = hipsNode.rotation.y;
+                this.bones.forEach((c, i) => {
+                    const ph = i * 0.65;
+                    c.vel.add(c.offset.clone().multiplyScalar(-c.stiffness * delta * 60));
+                    c.vel.x += angVelY * 0.004;
+                    c.vel.z += Math.sin(time * 1.1 + ph) * 0.006 * delta * 10;
+                    c.vel.multiplyScalar(c.damping);
+                    c.offset.add(c.vel);
+                    if (c.offset.length() > 0.055) c.offset.normalize().multiplyScalar(0.055);
+                    if (c.bone) {
+                        c.bone.rotation.x = c.baseRX + c.offset.x;
+                        c.bone.rotation.z = c.baseRZ + c.offset.z;
+                    }
+                });
+            },
+            reset() { this.bones = []; this.hipsPrevY = 0; }
+        };
+        // ══════════════════════════════════════════════════════════════
+        //  SPEECH GESTURE SYSTEM — Gestos diferenciados por personalidad
+        //  Nino (tsundere): gestos asertivos, brazos cruzados, señalar
+        //  Miku  (idol):    gestos abiertos, rítmicos, entusiastas
+        // ══════════════════════════════════════════════════════════════
+        const gestureSystem = {
+            idx: 8,       // 8 = idle relajado (posición neutra por defecto)
+            timer: 0,
+            interval: 2.8,
+
+            // ── Gestos de NINO (tsundere) ── índices 0–4
+            gesturesNino: [
+                // 0: Explica con autoridad — señala con el dedo derecho levantado
+                (t, s) => ({
+                    LUA:{z:1.30+Math.sin(t*1.5)*0.02, x:0.01},
+                    RUA:{z:-(0.62+Math.sin(t*1.8)*0.06*s), x:-0.22*s},
+                    LLA:{z:0.04, x:Math.sin(t*1.7)*0.03*s},
+                    RLA:{z:-0.18*s, x:-0.32*s}
+                }),
+                // 1: Tsundere — voltea la cabeza, brazo cruzado
+                (t, s) => ({
+                    LUA:{z:0.72+Math.sin(t*1.1)*0.03, x:0.38*s},
+                    RUA:{z:-(0.72+Math.sin(t*1.1)*0.03), x:-0.38*s},
+                    LLA:{z:0.22*s, x:0.12*s},
+                    RLA:{z:-0.22*s, x:-0.12*s}
+                }),
+                // 2: Pensativa — mano apoya la barbilla, pose reflexiva
+                (t, s) => ({
+                    LUA:{z:1.28+Math.sin(t*0.9)*0.02, x:0},
+                    RUA:{z:-(0.38+Math.sin(t*1.2)*0.025*s), x:-0.42*s},
+                    LLA:{z:0.02, x:0},
+                    RLA:{z:0.05*s, x:-0.55*s}
+                }),
+                // 3: Énfasis fuerte — corta el aire con la mano derecha
+                (t, s) => ({
+                    LUA:{z:1.22+Math.sin(t*1.4)*0.03, x:0.04*s},
+                    RUA:{z:-(0.58+Math.sin(t*3.2)*0.12*s), x:-0.18*s},
+                    LLA:{z:0.06, x:Math.sin(t*3.2)*0.08*s},
+                    RLA:{z:-0.14*s, x:-0.24*s}
+                }),
+                // 4: Orgullosa — manos en caderas (pequeña variación)
+                (t, s) => ({
+                    LUA:{z:0.88+Math.sin(t*0.8)*0.02, x:0.28*s},
+                    RUA:{z:-(0.88+Math.sin(t*0.8)*0.02), x:-0.28*s},
+                    LLA:{z:0.30*s, x:0.18*s},
+                    RLA:{z:-0.30*s, x:-0.18*s}
+                }),
+            ],
+
+            // ── Gestos de MIKU (idol alegre) ── índices 5–9
+            gesturesMiku: [
+                // 5: Entusiasta — ambas manos arriba con bounce
+                (t, s) => ({
+                    LUA:{z:0.58+Math.sin(t*3.8+0.3)*0.18*s, x:0.14*s},
+                    RUA:{z:-(0.58+Math.sin(t*3.8)*0.18*s), x:-0.14*s},
+                    LLA:{z:0.12*s, x:Math.sin(t*4.0)*0.10*s},
+                    RLA:{z:-0.12*s, x:Math.sin(t*4.0+0.5)*0.10*s}
+                }),
+                // 6: Melodiosa — manos dibujan ondas en el aire
+                (t, s) => ({
+                    LUA:{z:0.82+Math.sin(t*2.2)*0.14*s, x:0.12*s},
+                    RUA:{z:-(0.82+Math.sin(t*2.2+1.2)*0.14*s), x:-0.12*s},
+                    LLA:{z:0.18*s, x:Math.cos(t*2.8)*0.12*s},
+                    RLA:{z:-0.18*s, x:Math.cos(t*2.8+0.9)*0.12*s}
+                }),
+                // 7: Alegre — rebota suavemente
+                (t, s) => ({
+                    LUA:{z:1.02+Math.sin(t*4.2)*0.16*s, x:Math.sin(t*2.5)*0.09*s},
+                    RUA:{z:-(1.02+Math.sin(t*4.2+1.0)*0.16*s), x:-Math.sin(t*2.5)*0.09*s},
+                    LLA:{z:0.08*s, x:Math.sin(t*4.5)*0.08*s},
+                    RLA:{z:-0.08*s, x:Math.sin(t*4.5+0.6)*0.08*s}
+                }),
+                // 8: Wink/coqueta — una mano sube hacia el ojo
+                (t, s) => ({
+                    LUA:{z:1.30+Math.sin(t*1.0)*0.02, x:0.02},
+                    RUA:{z:-(0.44+Math.sin(t*1.4)*0.04*s), x:-0.32*s},
+                    LLA:{z:0.04, x:0},
+                    RLA:{z:0.04*s, x:-0.42*s}
+                }),
+                // 9: Presenta — brazos abiertos invitando al público
+                (t, s) => ({
+                    LUA:{z:0.68+Math.sin(t*1.5)*0.08*s, x:0.16*s},
+                    RUA:{z:-(0.68+Math.sin(t*1.5+0.4)*0.08*s), x:-0.16*s},
+                    LLA:{z:0.22*s, x:Math.sin(t*2.0)*0.07*s},
+                    RLA:{z:-0.22*s, x:Math.sin(t*2.0+0.8)*0.07*s}
+                }),
+            ],
+
+            // ── Idle neutro (8): brazos caídos, respiración sutil ──
+            idlePose(t) {
+                return {
+                    LUA:{z:1.42+Math.sin(t*1.4)*0.014, x:0.018+Math.sin(t*0.85)*0.009},
+                    RUA:{z:-1.42-Math.sin(t*1.4)*0.014, x:-0.018-Math.sin(t*0.85)*0.009},
+                    LLA:{z:0.05+Math.sin(t*1.55+0.6)*0.018, x:0},
+                    RLA:{z:-0.05-Math.sin(t*1.55+0.6)*0.018, x:0}
+                };
+            },
+
+            update(vrm, delta, time, speaking, waifuName) {
+                if (!vrm || !vrm.humanoid) return;
+                const isNino = waifuName === 'nino';
+                const pool = isNino ? this.gesturesNino : this.gesturesMiku;
+                const poolSize = pool.length;
+
+                // Mientras habla: rota gestos cada 2-4 s con variación de personalidad
+                if (speaking > 0.1) {
+                    this.timer += delta;
+                    const changeInterval = isNino
+                        ? 2.2 + Math.random() * 2.4   // Nino: gestos más frecuentes y asertivos
+                        : 1.8 + Math.random() * 2.8;  // Miku: más variada, cambia más rápido
+                    if (this.timer > this.interval) {
+                        this.timer = 0;
+                        this.interval = changeInterval;
+                        let next = this.idx;
+                        while (next === this.idx) next = Math.floor(Math.random() * poolSize);
+                        this.idx = next;
+                    }
+                } else {
+                    this.idx = poolSize; // idle
+                    this.timer = 0;
+                }
+
+                // Elegir pose: idle o gesto activo
+                const g = this.idx >= poolSize
+                    ? this.idlePose(time)
+                    : pool[this.idx](time, speaking);
+
+                const sign = vrm._isVRM1 ? -1 : 1;
+                const bones = {
+                    LUA: vrm.humanoid.getNormalizedBoneNode('leftUpperArm'),
+                    RUA: vrm.humanoid.getNormalizedBoneNode('rightUpperArm'),
+                    LLA: vrm.humanoid.getNormalizedBoneNode('leftLowerArm'),
+                    RLA: vrm.humanoid.getNormalizedBoneNode('rightLowerArm')
+                };
+
+                // Interpolación más suave para Miku (más fluida), más directa para Nino
+                const blendSpeed = isNino ? 3.2 : 4.0;
+                const sp  = Math.min(1, delta * blendSpeed);
+                const spF = Math.min(1, delta * (blendSpeed + 0.8));
+
+                for (const [key, bone] of Object.entries(bones)) {
+                    if (!bone || !g[key]) continue;
+                    const targetZ = g[key].z * sign;
+                    bone.rotation.z += (targetZ - bone.rotation.z) * sp;
+                    bone.rotation.x += (g[key].x - bone.rotation.x) * spF;
+                }
+            },
+            reset() { this.idx = 8; this.timer = 0; }
+        };
+
+        // ══════════════════════════════════════════════════════════════
+        //  IDLE RESTLESS SYSTEM — Inquietud diferenciada por personalidad
+        //  Nino:  se impacienta, se cruza de brazos, bufidos sutiles
+        //  Miku:  balancea suavemente, mira alrededor con curiosidad
+        // ══════════════════════════════════════════════════════════════
+        const idleRestless = {
+            lastInteraction: Date.now(),
+            phase: 0,
+            actionTimer: 0,
+            actionInterval: 5.5,
+            action: 'none',
+            actionProgress: 0,
+
+            notify() { this.lastInteraction = Date.now(); this.phase = 0; },
+
+            update(delta, isSpeaking, waifuName) {
+                if (isSpeaking) { this.lastInteraction = Date.now(); return { rs: 0, action: 'none', ap: 0, phase: 0 }; }
+                const elapsed = (Date.now() - this.lastInteraction) / 1000;
+                let rs = 0;
+
+                if (elapsed > 30) { rs = Math.min(1, (elapsed - 30) / 10) * 0.9; this.phase = 2; }
+                else if (elapsed > 15) { rs = Math.min(1, (elapsed - 15) / 8) * 0.7; this.phase = 1; }
+                else this.phase = 0;
+
+                this.actionTimer += delta;
+                if (this.actionTimer > this.actionInterval && this.phase >= 1) {
+                    this.actionTimer = 0;
+                    this.actionInterval = 3.2 + Math.random() * 5.0;
+
+                    // Nino se impacienta → acciones más tsundere
+                    // Miku se distrae → acciones más curiosas y suaves
+                    const ninoActions = ['hairTouch', 'armsCross', 'lookAround', 'sigh', 'fidget'];
+                    const mikuActions = ['hairTouch', 'lookAround', 'sway', 'sigh', 'fidget'];
+                    const pool = waifuName === 'nino' ? ninoActions : mikuActions;
+                    this.action = pool[Math.floor(Math.random() * pool.length)];
+                    this.actionProgress = 0;
+                }
+                if (this.action !== 'none') {
+                    this.actionProgress += delta;
+                    if (this.actionProgress > 2.8) { this.action = 'none'; this.actionProgress = 0; }
+                }
+                return { rs, action: this.action, ap: this.actionProgress, phase: this.phase };
+            }
+        };
+
+        // ── Estado global ──
+        let isSpeaking    = false;
+        let speakingSmooth = 0;
+        let isListening   = false;
+        let listenSmooth  = 0;
+
+        window.setNinoSpeaking = function(val) {
+            isSpeaking = val;
+            if (val) idleRestless.notify();
+            const dot = document.getElementById('status-dot');
+            if (dot) { val ? dot.classList.add('speaking') : dot.classList.remove('speaking'); }
+        };
+        window.setNinoListening = function(val) {
+            isListening = val;
+            if (val) idleRestless.notify();
+        };
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ══════════════════════════════════════════════════════════════
+        //  MAIN ANIMATION LOOP — con lógica de personalidad por waifu
+        // ══════════════════════════════════════════════════════════════
+        const clock = new THREE.Clock();
+        // Parpadeo
+        let blinkTimer = 0, nextBlink = 3.2, isBlinking = false, isDouble = false, doubleStage = 0;
+        // Microexpresiones
+        let microTimer = 0, nextMicro = 4 + Math.random() * 5, microExpr = 'none', microProg = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.05);
+            const time  = clock.getElapsedTime();
+            controls.update();
+
+            if (!currentVrm) { renderer.render(scene, camera); return; }
+
+            try {
+                const waifu   = activeWaifuAnim;
+                const isNino  = waifu === 'nino';
+                const isMiku  = waifu === 'miku';
+
+                // ── Entrada caminando + bounce de Miku ──
+                const isEntering = walkEntrance.update(currentVrm, delta);
+                if (!isEntering) walkEntrance.updateBounce(currentVrm, delta);
+
+                // ── Smooth signals ──
+                speakingSmooth += ((isSpeaking ? 1 : 0) - speakingSmooth) * Math.min(1, delta * 10);
+                listenSmooth   += ((isListening ? 1 : 0) - listenSmooth)  * Math.min(1, delta * 8);
+                const S = speakingSmooth;
+                const L = listenSmooth;
+
+                // ── Idle restless ──
+                const IR = idleRestless.update(delta, isSpeaking, waifu);
+                const rs = IR.rs;
+
+                // ── Bones ──
+                const hum   = currentVrm.humanoid;
+                const chest = hum?.getNormalizedBoneNode('chest');
+                const head  = hum?.getNormalizedBoneNode('head');
+                const hips  = hum?.getNormalizedBoneNode('hips');
+                const spine = hum?.getNormalizedBoneNode('spine');
+                const neck  = hum?.getNormalizedBoneNode('neck');
+                const RUA   = hum?.getNormalizedBoneNode('rightUpperArm');
+                const RLA   = hum?.getNormalizedBoneNode('rightLowerArm');
+                const LUA   = hum?.getNormalizedBoneNode('leftUpperArm');
+
+                // ── 1. Respiración — diferenciada por personaje ──
+                if (chest) {
+                    if (isNino) {
+                        // Nino: respiración más contenida y tensa al hablar
+                        chest.rotation.x = Math.sin(time*1.7)*0.016 + Math.sin(time*3.2)*0.006
+                                         + Math.sin(time*4.8)*0.028*S + Math.sin(time*2.4)*0.014*rs;
+                        chest.rotation.y = Math.sin(time*1.1)*0.009 + Math.sin(time*2.4)*0.022*S;
+                        chest.rotation.z = Math.sin(time*0.85+1.2)*0.007*rs;
+                    } else {
+                        // Miku: respiración más amplia y rítmica (idol con energía)
+                        chest.rotation.x = Math.sin(time*2.0)*0.022 + Math.sin(time*3.8)*0.009
+                                         + Math.sin(time*5.5)*0.018*S + Math.sin(time*2.8)*0.016*rs;
+                        chest.rotation.y = Math.sin(time*1.4)*0.012 + Math.sin(time*3.0)*0.026*S;
+                        chest.rotation.z = Math.sin(time*1.1+0.8)*0.010*rs + Math.sin(time*2.2)*0.008*S;
+                    }
+                }
+                if (spine) {
+                    spine.rotation.x = Math.sin(time*1.8)*0.008 + Math.sin(time*3.8)*0.013*S;
+                    spine.rotation.z = Math.sin(time*0.7)*0.006*rs
+                                     + (isMiku ? Math.sin(time*1.8)*0.006*S : 0);
+                }
+
+                // ── 2. Cabeza — Nino más orgullosa (mentón arriba), Miku más curiosa ──
+                if (head) {
+                    let hX, hY, hZ;
+                    if (isNino) {
+                        // Nino: ligera inclinación hacia atrás (altiva), movimiento más seco
+                        hX = -0.04 + Math.sin(time*0.75)*0.010
+                           + (Math.sin(time*6.5)*0.030 + Math.sin(time*3.0)*0.018)*S
+                           + Math.sin(time*1.05)*0.032*rs + 0.04*L;
+                        hY = Math.sin(time*0.55)*0.022 + Math.cos(time*0.22)*0.013
+                           + Math.sin(time*2.2)*0.042*S + Math.sin(time*1.7+0.5)*0.072*rs;
+                        hZ = Math.cos(time*0.42)*0.016 + Math.sin(time*3.4)*0.025*S
+                           + Math.sin(time*0.48)*0.011*rs;
+                    } else {
+                        // Miku: inclina la cabeza con curiosidad, más tilting y expresiva
+                        hX = 0.02 + Math.sin(time*0.85)*0.014
+                           + (Math.sin(time*7.2)*0.038 + Math.sin(time*3.4)*0.022)*S
+                           + Math.sin(time*1.15)*0.028*rs + 0.06*L;
+                        hY = Math.sin(time*0.65)*0.030 + Math.cos(time*0.28)*0.018
+                           + Math.sin(time*2.6)*0.055*S + Math.sin(time*2.0+0.6)*0.090*rs;
+                        hZ = Math.cos(time*0.50)*0.022 + Math.sin(time*4.0)*0.035*S
+                           + Math.sin(time*0.55)*0.014*rs;
+                    }
+
+                    if (IR.action === 'lookAround') {
+                        hY += Math.sin(IR.ap*2.2)*0.30;
+                        hX += Math.sin(IR.ap*1.6)*0.08;
+                    }
+                    if (IR.action === 'fidget') hZ += Math.sin(IR.ap*4.2)*0.045;
+                    if (IR.action === 'sway' && isMiku) {
+                        hY += Math.sin(IR.ap*1.8)*0.12;
+                        hZ += Math.sin(IR.ap*2.4)*0.06;
+                    }
+                    if (IR.action === 'armsCross' && isNino) {
+                        // Cuando Nino se cruza de brazos, tuerce un poco la cabeza con orgullo
+                        hY += Math.sin(Math.min(1, IR.ap/2.8)*Math.PI) * 0.10;
+                        hZ += Math.sin(Math.min(1, IR.ap/2.8)*Math.PI) * 0.08;
+                    }
+
+                    // Blending más suave para Miku, más directo para Nino
+                    const headSpeed = isNino ? 5.5 : 7.0;
+                    head.rotation.x += (hX - head.rotation.x) * Math.min(1, delta * headSpeed);
+                    head.rotation.y += (hY - head.rotation.y) * Math.min(1, delta * headSpeed);
+                    head.rotation.z += (hZ - head.rotation.z) * Math.min(1, delta * headSpeed);
+                }
+
+                // ── 3. Cuello ──
+                if (neck) {
+                    neck.rotation.x = Math.sin(time*0.92)*0.006 + 0.010*S;
+                    neck.rotation.y = Math.sin(time*(isNino ? 0.52 : 0.68))*0.012*rs;
+                }
+
+                // ── 4. Caderas — Miku con balanceo rítmico ──
+                if (hips) {
+                    if (isNino) {
+                        hips.rotation.y = Math.sin(time*1.55)*0.010 + Math.sin(time*2.1)*0.018*S
+                                        + Math.sin(time*2.3+0.8)*0.024*rs;
+                        hips.rotation.z = Math.sin(time*1.25+1.0)*0.007*rs;
+                    } else {
+                        // Miku: cadera con ritmo musical suave, incluso en idle
+                        hips.rotation.y = Math.sin(time*1.8)*0.014 + Math.sin(time*2.4)*0.022*S
+                                        + Math.sin(time*2.6+0.9)*0.028*rs
+                                        + Math.sin(time*1.2)*0.009;   // swaying base
+                        hips.rotation.z = Math.sin(time*1.4+0.8)*0.010*rs
+                                        + Math.sin(time*0.9)*0.007;
+                    }
+                    if (IR.action === 'shrug' || IR.action === 'sigh') {
+                        hips.rotation.z += Math.sin(IR.ap*2.8)*0.038;
+                    }
+                    if (IR.action === 'sway' && isMiku) {
+                        hips.rotation.z += Math.sin(IR.ap*2.0)*0.055;
+                        hips.rotation.y += Math.sin(IR.ap*1.8)*0.04;
+                    }
+                }
+
+                // ── 5. Gestos con brazos (solo fuera de la entrada) ──
+                if (!isEntering) gestureSystem.update(currentVrm, delta, time, S, waifu);
+
+                // ── Acción idle: arreglarse el pelo ──
+                if (IR.action === 'hairTouch' && RUA) {
+                    const c = Math.sin(Math.min(1, Math.max(0, IR.ap / 2.8)) * Math.PI);
+                    const sign = currentVrm._isVRM1 ? -1 : 1;
+                    // Nino: la mano va al lado del cuello/oreja (pose orgullosa)
+                    // Miku: la mano sube más arriba, pose más coqueta
+                    const targetZ = isNino ? -sign * 0.40 : -sign * 0.36;
+                    const targetX = isNino ? -0.52 : -0.60;
+                    RUA.rotation.z += (targetZ - RUA.rotation.z) * (c * Math.min(1, delta * 3.8));
+                    RUA.rotation.x += (targetX - RUA.rotation.x) * (c * Math.min(1, delta * 3.8));
+                    if (RLA) RLA.rotation.x += (-0.48 - RLA.rotation.x) * (c * Math.min(1, delta * 3.8));
+                }
+
+                // ── Acción tsundere: brazos cruzados (solo Nino) ──
+                if (IR.action === 'armsCross' && isNino && LUA && RUA) {
+                    const c = Math.sin(Math.min(1, Math.max(0, IR.ap / 2.8)) * Math.PI);
+                    const sign = currentVrm._isVRM1 ? -1 : 1;
+                    LUA.rotation.z += (sign * 0.72 - LUA.rotation.z) * (c * Math.min(1, delta * 3.2));
+                    LUA.rotation.x += (0.55 - LUA.rotation.x) * (c * Math.min(1, delta * 3.2));
+                    RUA.rotation.z += (-sign * 0.72 - RUA.rotation.z) * (c * Math.min(1, delta * 3.2));
+                    RUA.rotation.x += (-0.55 - RUA.rotation.x) * (c * Math.min(1, delta * 3.2));
+                }
+
+                // ── Acción Miku: sway rítmico de brazos ──
+                if (IR.action === 'sway' && isMiku && LUA && RUA) {
+                    const c = Math.sin(Math.min(1, IR.ap / 2.8) * Math.PI);
+                    const sign = currentVrm._isVRM1 ? -1 : 1;
+                    LUA.rotation.z += (sign * 1.15 - LUA.rotation.z) * (c * Math.min(1, delta * 2.5));
+                    RUA.rotation.z += (-sign * 1.15 - RUA.rotation.z) * (c * Math.min(1, delta * 2.5));
+                    LUA.rotation.x += (Math.sin(IR.ap*2.0)*0.18 - LUA.rotation.x) * (c * Math.min(1, delta * 2.5));
+                    RUA.rotation.x += (-Math.sin(IR.ap*2.0)*0.18 - RUA.rotation.x) * (c * Math.min(1, delta * 2.5));
+                }
+
+                // ── 6. Lip-sync — más variado y ajustado por personaje ──
+                if (S > 0.02) {
+                    const cycle = Math.sin(time*14)*0.42 + Math.sin(time*23)*0.28 + 0.30;
+                    const mo    = Math.max(0, Math.min(1, cycle)) * S;
+                    const vw    = (Math.sin(time*5.2) + 1) * 0.5;
+                    const vowelX = (Math.sin(time*3.8) + 1) * 0.5;
+                    expressionController.set('aa', mo*(0.80-vw*0.30),         14);
+                    expressionController.set('oh', mo*vw*0.62,                 14);
+                    expressionController.set('ih', mo*0.25*(1-vw),             14);
+                    expressionController.set('ee', mo*0.18*vowelX,             14);
+                    expressionController.set('ou', mo*0.12*(1-vowelX),         14);
+
+                    if (isNino) {
+                        // Nino: expresión happy contenida + pequeño angry cuando habla fuerte
+                        expressionController.set('happy',   0.22+S*0.12,   5);
+                        expressionController.set('angry',   S*0.12,         4);
+                        expressionController.set('relaxed', 0.08,           4);
+                    } else {
+                        // Miku: siempre alegre y radiante al hablar
+                        expressionController.set('happy',   0.42+S*0.18,   5);
+                        expressionController.set('relaxed', 0.15,           4);
+                        expressionController.set('surprised', S*0.10,       4);
+                    }
+                } else {
+                    expressionController.set('aa',  0, 10);
+                    expressionController.set('oh',  0, 10);
+                    expressionController.set('ih',  0, 10);
+                    expressionController.set('ou',  0, 10);
+                    expressionController.set('ee',  0, 10);
+                    if (isNino) {
+                        expressionController.set('happy',   0.14,  3);
+                        expressionController.set('relaxed', 0.06,  3);
+                        expressionController.set('angry',   0,     3);
+                    } else {
+                        expressionController.set('happy',   0.30,  3);
+                        expressionController.set('relaxed', 0.12,  3);
+                    }
+                }
+
+                // ── 7. Expresiones de estado por personaje ──
+                if (rs > 0.1 && IR.phase === 2) {
+                    if (isNino) {
+                        // Nino aburrrida: cara de pocos amigos
+                        expressionController.set('angry', 0.20*rs,             2);
+                        expressionController.set('sad',   0.10*rs,             2);
+                        expressionController.set('happy', Math.max(0, 0.14-rs*0.14), 3);
+                    } else {
+                        // Miku aburrida: algo melancólica pero sutil
+                        expressionController.set('sad',   0.18*rs,             2);
+                        expressionController.set('happy', Math.max(0, 0.30-rs*0.20), 3);
+                    }
+                } else {
+                    expressionController.set('sad',   0, 3);
+                    if (isNino) expressionController.set('angry', 0, 3);
+                }
+
+                if (IR.action === 'sigh') {
+                    expressionController.set('relaxed', Math.sin(IR.ap*Math.PI/1.1)*0.50, 5);
+                }
+                expressionController.set('surprised', L*(isNino ? 0.22 : 0.35), isListening ? 8 : 5);
+
+                // ── 8. Microexpresiones — distintas por personaje ──
+                microTimer += delta;
+                if (microTimer > nextMicro && !isSpeaking) {
+                    microTimer = 0; nextMicro = 4 + Math.random() * 7;
+                    const ninoMicros  = ['blush','angry','relaxed','surprised'];
+                    const mikuMicros  = ['blush','happy','relaxed','surprised','wink'];
+                    const pool = isNino ? ninoMicros : mikuMicros;
+                    microExpr = pool[Math.floor(Math.random() * pool.length)];
+                    microProg = 0;
+                }
+                if (microExpr !== 'none' && !isSpeaking) {
+                    microProg += delta;
+                    const intensity = isNino ? 0.30 : 0.38;
+                    expressionController.set(microExpr, Math.max(0, Math.sin(microProg*Math.PI/1.3)*intensity), 7);
+                    if (microProg > 1.3) microExpr = 'none';
+                }
+
+                // ── 9. Parpadeo orgánico — Nino parpadea más lento (pose seria) ──
+                blinkTimer += delta;
+                if (!isBlinking && blinkTimer > nextBlink) {
+                    isBlinking = true; blinkTimer = 0;
+                    // Nino: guiño doble menos frecuente. Miku: guiño coqueto más frecuente.
+                    isDouble = Math.random() < (isNino ? 0.20 : 0.35); doubleStage = 0;
+                }
+                if (isBlinking) {
+                    const blinkSpeed = isNino ? 0.13 : 0.11; // Miku parpadea más rápido
+                    expressionController.set('blink', Math.max(0, Math.sin((blinkTimer/blinkSpeed)*Math.PI)), 32);
+                    if (blinkTimer >= blinkSpeed) {
+                        if (isDouble && doubleStage === 0) { doubleStage = 1; blinkTimer = -0.07; }
+                        else {
+                            expressionController.set('blink', 0, 32);
+                            isBlinking = false; blinkTimer = 0;
+                            const baseInterval = isNino ? 3.0 : 2.4; // Miku parpadea más seguido
+                            nextBlink = (baseInterval + Math.random() * 3.0) * (rs > 0.3 ? 0.55 : 1.0);
+                        }
+                    }
+                }
+
+                // ── 10. Física de pelo ──
+                hairPhysics.update(currentVrm, delta, head);
+
+                // ── 11. Física de ropa ──
+                clothPhysics.update(currentVrm, delta, hips, time);
+
+                // ── 12. Expression flush ──
+                expressionController.update(currentVrm, delta);
+
+                currentVrm.update(delta);
+
+            } catch(err) {
+                if (!animate._warned) {
+                    animate._warned = true;
+                    console.warn('[Avatar] Error en el bucle de animación (solo se avisa una vez):', err);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        cargarWaifu('nino');
+        animate();
+    </script>    </script>
+
+    <!-- Lógica de Interacción en Tiempo Real -->
+    <script>
+        const chatInput = document.getElementById('chat-input');
+        const sendBtn = document.getElementById('send-btn');
+        const micBtn = document.getElementById('mic-btn');
+        const ninoText = document.getElementById('nino-text');
+        const userWhisper = document.getElementById('user-whisper');
+        const mangaBubble = document.getElementById('manga-bubble');
+
+        // Panel de configuración
+        const configToggleBtn = document.getElementById('config-toggle-btn');
+        const configPanel = document.getElementById('config-panel');
+        const configCloseBtn = document.getElementById('config-close-btn');
+        const waifuCards = document.querySelectorAll('.waifu-card');
+        const waifuDescDisplay = document.getElementById('waifu-desc-display');
+        const mangaTag = document.getElementById('manga-tag');
+
+        // Cuenta y persistencia de sesión
+        const authOverlay = document.getElementById('auth-overlay');
+        const authForm = document.getElementById('auth-form');
+        const authUsername = document.getElementById('auth-username');
+        const authPassword = document.getElementById('auth-password');
+        const authError = document.getElementById('auth-error');
+        const authSubtitle = document.getElementById('auth-subtitle');
+        const authSubmitBtn = document.getElementById('auth-submit-btn');
+        const authTabs = document.querySelectorAll('.auth-tab');
+        const profileToggleBtn = document.getElementById('profile-toggle-btn');
+        const profilePanel = document.getElementById('profile-panel');
+        const profileCloseBtn = document.getElementById('profile-close-btn');
+        const profileUsername = document.getElementById('profile-username');
+        const activeGeminiSlot = document.getElementById('active-gemini-slot');
+        const geminiKeyInputs = document.querySelectorAll('.gemini-key');
+        const fishKeyInput = document.getElementById('fish-key');
+        const ttsProviderSelect = document.getElementById('tts-provider-select');
+        const profileSaveBtn = document.getElementById('profile-save-btn');
+        const profileLogoutBtn = document.getElementById('profile-logout-btn');
+        const profileNotice = document.getElementById('profile-notice');
+
+        let activeWaifu = 'nino';
+        let isRecording = false;
+        let currentAudio = null;
+        let authMode = 'login';
+        let profile = null;
+
+        const waifuDetails = {
+            nino: {
+                name: 'Nino Nakano',
+                desc: 'Aunque tiene su característico toque tsundere y algo orgulloso, es dulce, atenta, cariñosa y cercana con quien habla.',
+                placeholder: 'Escribe a Nino...',
+                tag: 'NINO NAKANO',
+                greeting: 'Tch, hola. ¿Qué quieres? Habla rápido.'
+            },
+            miku: {
+                name: 'Hatsune Miku',
+                desc: 'Apreciada idol virtual Alegre, optimista, entusiasta de la música, idol virtual servicial, como es hatsune miku.',
+                placeholder: 'Escribe a Miku...',
+                tag: 'HATSUNE MIKU',
+                greeting: '¡Hola! ¡Soy Hatsune Miku! ¡Qué alegría hablar contigo! ¿De qué te gustaría hablar hoy? ¿Quieres que hablemos de música?'
+            }
+        };
+
+        async function apiFetch(url, options = {}) {
+            const res = await fetch(url, options);
+            let data = {};
+            try { data = await res.json(); } catch (_) { data = { status: 'error', message: 'Respuesta inválida del servidor.' }; }
+            return { res, data };
+        }
+
+        function showAuth() {
+            profile = null;
+            profilePanel.classList.remove('open');
+            profileToggleBtn.style.display = 'none';
+            authOverlay.classList.add('visible');
+            authOverlay.setAttribute('aria-hidden', 'false');
+            setTimeout(() => authUsername.focus(), 220);
+        }
+
+        function hideAuth() {
+            authOverlay.classList.remove('visible');
+            authOverlay.setAttribute('aria-hidden', 'true');
+            profileToggleBtn.style.display = '';
+            authError.textContent = '';
+            authPassword.value = '';
+        }
+
+        function fillProfile(nextProfile) {
+            profile = nextProfile;
+            profileUsername.textContent = nextProfile.username;
+            if (ttsProviderSelect) {
+                ttsProviderSelect.value = nextProfile.tts_provider || 'gemini';
+            }
+            activeGeminiSlot.value = String(nextProfile.active_gemini_slot || 1);
+            geminiKeyInputs.forEach((input, index) => { input.value = (nextProfile.gemini_keys || [])[index] || ''; });
+            fishKeyInput.value = nextProfile.fish_key || '';
+        }
+
+        function openProfilePanel() {
+            if (!profile) return showAuth();
+            profilePanel.classList.add('open');
+            profileToggleBtn.style.opacity = '0';
+            profileToggleBtn.style.pointerEvents = 'none';
+            profileNotice.textContent = '';
+            profileNotice.classList.remove('error');
+        }
+
+        function closeProfilePanel() {
+            profilePanel.classList.remove('open');
+            profileToggleBtn.style.opacity = '1';
+            profileToggleBtn.style.pointerEvents = 'auto';
+        }
+
+        async function loadSession() {
+            try {
+                const { res, data } = await apiFetch('/api/profile');
+                if (res.ok && data.status === 'ok') {
+                    fillProfile(data.profile);
+                    hideAuth();
+                } else {
+                    showAuth();
+                }
+            } catch (_) {
+                showAuth();
+            }
+        }
+
+        authTabs.forEach(tab => tab.addEventListener('click', () => {
+            authMode = tab.dataset.authMode;
+            authTabs.forEach(item => item.classList.toggle('active', item === tab));
+            const creating = authMode === 'register';
+            authSubtitle.textContent = creating
+                ? 'Crea tu espacio privado para conservar tus claves y tu sesión.'
+                : 'Inicia sesión para conversar y guardar tus claves privadas.';
+            authSubmitBtn.textContent = creating ? 'Crear cuenta' : 'Entrar';
+            authPassword.autocomplete = creating ? 'new-password' : 'current-password';
+            authError.textContent = '';
+        }));
+
+        authForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            authError.textContent = '';
+            authSubmitBtn.disabled = true;
+            authSubmitBtn.textContent = authMode === 'register' ? 'Creando…' : 'Entrando…';
+            try {
+                const { res, data } = await apiFetch(`/api/${authMode}`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: authUsername.value.trim(), password: authPassword.value })
+                });
+                if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo iniciar la sesión.');
+                fillProfile(data.profile);
+                hideAuth();
+            } catch (error) {
+                authError.textContent = error.message || 'No se pudo conectar con el servidor.';
+            } finally {
+                authSubmitBtn.disabled = false;
+                authSubmitBtn.textContent = authMode === 'register' ? 'Crear cuenta' : 'Entrar';
+            }
+        });
+
+        profileToggleBtn.addEventListener('click', openProfilePanel);
+        profileCloseBtn.addEventListener('click', closeProfilePanel);
+        profileSaveBtn.addEventListener('click', async () => {
+            profileNotice.textContent = 'Guardando…';
+            profileNotice.classList.remove('error');
+            profileSaveBtn.disabled = true;
+            try {
+                const { res, data } = await apiFetch('/api/profile', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        tts_provider: ttsProviderSelect ? ttsProviderSelect.value : 'gemini',
+                        active_gemini_slot: Number(activeGeminiSlot.value),
+                        gemini_keys: Array.from(geminiKeyInputs, input => input.value),
+                        fish_key: fishKeyInput.value
+                    })
+                });
+                if (res.status === 401) return showAuth();
+                if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudieron guardar los cambios.');
+                fillProfile(data.profile);
+                profileNotice.textContent = 'Cambios guardados ✓';
+            } catch (error) {
+                profileNotice.textContent = error.message || 'No se pudo conectar con el servidor.';
+                profileNotice.classList.add('error');
+            } finally {
+                profileSaveBtn.disabled = false;
+            }
+        });
+
+        profileLogoutBtn.addEventListener('click', async () => {
+            profileLogoutBtn.disabled = true;
+            try { await apiFetch('/api/logout', { method: 'POST' }); } catch (_) { /* se borra la vista local igualmente */ }
+            profileLogoutBtn.disabled = false;
+            showAuth();
+        });
+
+        // Comprueba la cookie al abrir la página; la sesión persiste durante 30 días.
+        loadSession();
+
+        function openConfigPanel() {
+            configPanel.classList.add('open');
+            configToggleBtn.style.opacity = '0';
+            configToggleBtn.style.pointerEvents = 'none';
+        }
+
+        function closeConfigPanel() {
+            configPanel.classList.remove('open');
+            configToggleBtn.style.opacity = '1';
+            configToggleBtn.style.pointerEvents = 'auto';
+        }
+
+        // Animación de despliegue/cierre desde el botón flotante y desde el tag del bocadillo
+        configToggleBtn.addEventListener('click', openConfigPanel);
+        configCloseBtn.addEventListener('click', closeConfigPanel);
+
+        if (mangaTag) {
+            mangaTag.addEventListener('click', () => {
+                openConfigPanel();
+            });
+        }
+
+        // Cambio de Waifu mediante Tarjetas Interactivas
+        function selectWaifu(selectedKey) {
+            if (activeWaifu === selectedKey) return;
+            activeWaifu = selectedKey;
+
+            // Actualizar tarjetas activas
+            waifuCards.forEach(card => {
+                if (card.dataset.waifu === selectedKey) {
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                }
+            });
+
+            const details = waifuDetails[selectedKey];
+            if (waifuDescDisplay) waifuDescDisplay.innerText = details.desc;
+            chatInput.placeholder = details.placeholder;
+            if (mangaTag) {
+                mangaTag.innerHTML = `${details.tag} <span class="manga-tag-switch-hint">CAMBIAR ⟳</span>`;
+            }
+
+            // Saludo inicial de la nueva Waifu
+            setNinoMessage(details.greeting);
+
+            // Cambiar modelo en la escena de Three.js
+            if (window.cargarWaifuEnEscena) {
+                window.cargarWaifuEnEscena(selectedKey);
+            }
+        }
+
+        waifuCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const targetWaifu = card.dataset.waifu;
+                selectWaifu(targetWaifu);
+            });
+        });
+
+        function triggerBubblePop() {
+            mangaBubble.style.animation = 'none';
+            void mangaBubble.offsetWidth;
+            mangaBubble.style.animation = 'mangaPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+        }
+
+        function setNinoMessage(msg) {
+            ninoText.innerHTML = msg;
+            triggerBubblePop();
+        }
+
+        function setUserMessage(msg) {
+            userWhisper.innerText = 'Tú: ' + msg;
+            userWhisper.classList.add('visible');
+        }
+
+        function reproducirAudio(url) {
+            if (!url) return;
+
+            // Detener audio anterior si existe
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+
+            const audio = new Audio(url);
+            currentAudio = audio;
+
+            audio.onplay = () => {
+                if (window.setNinoSpeaking) window.setNinoSpeaking(true);
+            };
+            audio.onended = () => {
+                if (window.setNinoSpeaking) window.setNinoSpeaking(false);
+                currentAudio = null;
+            };
+            audio.onerror = () => {
+                if (window.setNinoSpeaking) window.setNinoSpeaking(false);
+                currentAudio = null;
+            };
+
+            audio.play().catch(() => {
+                // Autoplay bloqueado por el navegador (requiere interacción previa del usuario)
+                if (window.setNinoSpeaking) window.setNinoSpeaking(false);
+            });
+        }
+
+        async function procesarRespuesta(data) {
+            if (data.status === 'ok') {
+                setNinoMessage(data.nino_text);
+                if (data.audio_url) {
+                    reproducirAudio(data.audio_url);
+                }
+            } else {
+                setNinoMessage(data.message || 'Error al comunicarse');
+            }
+        }
+
+        async function enviarTexto(customText = null) {
+            const texto = customText ? customText.trim() : chatInput.value.trim();
+            if (!texto) return;
+
+            if (!customText) chatInput.value = '';
+            setUserMessage(texto);
+
+            // Activar estado "escuchando/procesando" en el avatar
+            if (window.setNinoListening) window.setNinoListening(true);
+            setNinoMessage('<span class="dots-loading">Pensando<span>.</span><span>.</span><span>.</span></span>');
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: texto, waifu: activeWaifu })
+                });
+                const data = await res.json();
+                if (window.setNinoListening) window.setNinoListening(false);
+                if (res.status === 401) {
+                    showAuth();
+                    return;
+                }
+                await procesarRespuesta(data);
+            } catch (err) {
+                if (window.setNinoListening) window.setNinoListening(false);
+                setNinoMessage('Error de conexión con el servidor.');
+            }
+        }
+
+        // Reconocimiento de voz: Web Speech API (navegador) con fallback al backend
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognizerInstance = null;
+
+        if (SpeechRec) {
+            recognizerInstance = new SpeechRec();
+            recognizerInstance.lang = 'es-ES';
+            recognizerInstance.continuous = false;
+            recognizerInstance.interimResults = false;
+
+            recognizerInstance.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                if (transcript) enviarTexto(transcript);
+            };
+
+            recognizerInstance.onerror = (event) => {
+                console.warn('Web Speech falló, usando backend:', event.error);
+                grabarBackend();
+            };
+
+            recognizerInstance.onend = () => {
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                micBtn.innerText = '🎤';
+            };
+        }
+
+        async function grabarBackend() {
+            try {
+                const res = await fetch('/api/record', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ waifu: activeWaifu })
+                });
+                const data = await res.json();
+                if (res.status === 401) {
+                    showAuth();
+                    return;
+                }
+                if (data.status === 'ok') setUserMessage(data.user_text);
+                await procesarRespuesta(data);
+            } catch (err) {
+                setNinoMessage('Error al grabar el micrófono.');
+            } finally {
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                micBtn.innerText = '🎤';
+                if (window.setNinoListening) window.setNinoListening(false);
+            }
+        }
+
+        async function alternarVoz() {
+            if (isRecording) return;
+            isRecording = true;
+            micBtn.classList.add('recording');
+            micBtn.innerText = '⏺';
+            setNinoMessage('Te estoy escuchando... Habla ahora.');
+            if (window.setNinoListening) window.setNinoListening(true);
+
+            if (recognizerInstance) {
+                try {
+                    recognizerInstance.start();
+                } catch (e) {
+                    grabarBackend();
+                }
+            } else {
+                grabarBackend();
+            }
+        }
+
+        sendBtn.addEventListener('click', () => enviarTexto());
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') enviarTexto();
+        });
+        micBtn.addEventListener('click', alternarVoz);
+    </script>
+</body>
+</html>

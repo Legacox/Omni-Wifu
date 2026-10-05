@@ -1,0 +1,5 @@
+bottle
+google-genai
+edge-tts
+requests
+psycopg[binary]

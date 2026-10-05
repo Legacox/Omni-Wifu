@@ -1,0 +1,6 @@
+# Datos privados generados en ejecución: nunca subirlos a GitHub.
+users.db
+users.db-*
+audio_cache/
+__pycache__/
+.env
