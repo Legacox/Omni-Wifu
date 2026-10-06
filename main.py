@@ -806,6 +806,11 @@ def generar_audio_respuesta(texto, user, waifu="nino"):
 def api_register():
     if request.method == "OPTIONS":
         return json_response({})
+
+    # Supabase es obligatorio para el envío del email de confirmación
+    if supabase_client is None:
+        return json_response({"status": "error", "message": "El servidor no tiene Supabase configurado. Contacta con el administrador."}, 503)
+
     data = request_data()
     username, password = str(data.get("username", "")).strip(), str(data.get("password", ""))
     email = str(data.get("email", "")).strip().lower()
@@ -817,38 +822,53 @@ def api_register():
         return json_response({"status": "error", "message": "El usuario debe tener entre 3 y 32 caracteres."}, 400)
     if len(password) < 8:
         return json_response({"status": "error", "message": "La contraseña debe tener al menos 8 caracteres."}, 400)
+
+    # Comprobar duplicados en la BD local antes de llamar a Supabase
     try:
         with db_connection() as conn:
             if db_execute(conn, "SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (username,)).fetchone():
                 return json_response({"status": "error", "message": "Ese nombre de usuario ya está en uso."}, 409)
             if db_execute(conn, "SELECT id FROM users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone():
                 return json_response({"status": "error", "message": "Ese correo ya está asociado a una cuenta."}, 409)
-            code = f"{secrets.randbelow(1000000):06d}"
-            db_execute(conn, "INSERT INTO email_verifications (email, username, password_hash, code_hash, expires_at, terms_version) VALUES (?, ?, ?, ?, ?, ?)",
-                       (email, username, hash_password(password), hashlib.sha256(code.encode()).hexdigest(), time.time() + 600, TERMS_VERSION))
-    except INTEGRITY_ERRORS:
-        return json_response({"status": "error", "message": "Ya hay una verificación pendiente para ese correo."}, 409)
+    except Exception as db_err:
+        print(f"[BD] Error al comprobar duplicados: {db_err}")
+        return json_response({"status": "error", "message": "Error interno del servidor. Inténtalo de nuevo."}, 500)
 
-    # Registro paralelo en Supabase Auth (si está configurado)
-    if supabase_client is not None:
-        try:
-            supabase_client.auth.sign_up({
-                "email": email,
-                "password": password,
-                "options": {"data": {"username": username}},
-            })
-            print(f"[Supabase] Usuario registrado en Auth: {email}")
-        except Exception as sb_err:
-            # No bloqueamos el flujo local si Supabase falla
-            print(f"[Supabase] Advertencia al registrar en Auth: {sb_err}")
-
+    # Registrar en Supabase Auth — Supabase envía el email de confirmación automáticamente
     try:
-        send_verification_email(email, code)
-    except Exception:
+        sb_result = supabase_client.auth.sign_up({
+            "email": email,
+            "password": password,
+            "options": {
+                "data": {"username": username, "terms_version": TERMS_VERSION},
+            },
+        })
+        sb_user = getattr(sb_result, "user", None)
+        if not sb_user:
+            raise RuntimeError("Supabase no devolvió un usuario al registrar.")
+        print(f"[Supabase] Correo de confirmación enviado a: {email}")
+    except Exception as sb_err:
+        err_msg = str(sb_err).lower()
+        if "already registered" in err_msg or "user already registered" in err_msg:
+            return json_response({"status": "error", "message": "Ese correo ya está registrado. Inicia sesión o usa otro correo."}, 409)
+        print(f"[Supabase] Error al registrar: {sb_err}")
+        return json_response({"status": "error", "message": "No se pudo enviar el correo de confirmación. Inténtalo de nuevo en unos minutos."}, 503)
+
+    # Guardar el username temporalmente para recuperarlo cuando el usuario confirme el enlace
+    try:
         with db_connection() as conn:
             db_execute(conn, "DELETE FROM email_verifications WHERE email = ?", (email,))
-        return json_response({"status": "error", "message": "No se pudo enviar el correo. Revisa la configuración de correo del servidor e inténtalo de nuevo."}, 503)
-    return json_response({"status": "verification_required", "message": "Te hemos enviado un código. Introdúcelo para terminar de crear la cuenta."}, 202)
+            db_execute(conn,
+                "INSERT INTO email_verifications (email, username, password_hash, code_hash, expires_at, terms_version) VALUES (?, ?, ?, ?, ?, ?)",
+                (email, username, hash_password(password), "", time.time() + 86400, TERMS_VERSION))
+    except Exception:
+        pass  # No bloqueamos el flujo si falla el guardado del placeholder
+
+    return json_response({
+        "status": "verification_required",
+        "message": "Te hemos enviado un enlace de confirmación. Ábrelo desde tu correo para activar la cuenta.",
+        "supabase_flow": True,
+    }, 202)
 
 
 @server_app.route("/api/verify-email", method=["POST", "OPTIONS"])

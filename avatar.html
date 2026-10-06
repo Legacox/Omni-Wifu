@@ -813,8 +813,12 @@
                 <label class="auth-check"><input id="terms-accept" type="checkbox" required><span>He leído y acepto los <a class="auth-link" id="terms-open">términos y condiciones</a> y la información sobre mis datos.</span></label>
             </div>
             <div class="auth-extra" id="verification-fields" hidden>
-                <label class="profile-label" for="auth-code">Código de verificación</label>
-                <input class="profile-input" id="auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="Código de 6 dígitos" disabled>
+                <div id="supabase-link-notice" style="text-align:center;padding:12px 4px 4px;line-height:1.55;">
+                    <span style="font-size:1.6rem;">📧</span><br>
+                    <strong>Revisa tu correo</strong><br>
+                    <span id="verify-email-hint" style="font-size:0.88rem;opacity:0.8;">Hemos enviado un enlace de confirmación. Ábrelo para activar tu cuenta y volver aquí.</span>
+                </div>
+                <input class="profile-input" id="auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="Código de 6 dígitos" disabled style="display:none">
             </div>
             <button class="auth-submit" id="auth-submit-btn" type="submit">Entrar</button>
             <div class="auth-error" id="auth-error" role="alert"></div>
@@ -2075,6 +2079,10 @@
             verificationFields.hidden = true;
             authCode.disabled = true;
             authCode.required = false;
+            // Restaurar campos que podrían haberse ocultado durante el flujo Supabase
+            document.getElementById('auth-username').parentElement.hidden = false;
+            document.getElementById('auth-password').parentElement.hidden = false;
+            document.getElementById('terms-accept-row').hidden = false;
             registerFields.hidden = authMode !== 'register';
             authEmail.disabled = authMode !== 'register';
             authEmail.required = authMode === 'register';
@@ -2097,7 +2105,15 @@
             event.preventDefault();
             authError.textContent = '';
             authSubmitBtn.disabled = true;
-            authSubmitBtn.textContent = authStep === 'verify' ? 'Verificando…' : (authMode === 'register' ? 'Enviando código…' : 'Entrando…');
+
+            // Si estamos esperando el enlace de Supabase, el botón sirve como "ya confirmé / entrar"
+            if (authStep === 'supabase_pending') {
+                authSubmitBtn.disabled = false;
+                authError.textContent = 'Abre el enlace del correo y vuelve aquí. La página se actualizará sola al confirmar.';
+                return;
+            }
+
+            authSubmitBtn.textContent = authStep === 'verify' ? 'Verificando…' : (authMode === 'register' ? 'Enviando…' : 'Entrando…');
             try {
                 if (authStep === 'credentials' && !termsAccept.checked) throw new Error('Debes aceptar los términos y condiciones para continuar.');
                 const endpoint = authStep === 'verify' ? '/api/verify-email' : `/api/${authMode}`;
@@ -2108,11 +2124,32 @@
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+
+                // Flujo Supabase: el servidor envió un enlace por email
+                if (res.status === 202 && data.status === 'verification_required' && data.supabase_flow) {
+                    authStep = 'supabase_pending';
+                    // Ocultar campos de formulario, mostrar aviso de "revisa tu correo"
+                    document.getElementById('auth-username').closest('label') && (document.getElementById('auth-username').parentElement.hidden = true);
+                    registerFields.hidden = true;
+                    document.getElementById('auth-password').parentElement.hidden = true;
+                    document.getElementById('terms-accept-row').hidden = true;
+                    verificationFields.hidden = false;
+                    const hint = document.getElementById('verify-email-hint');
+                    if (hint) hint.textContent = `Hemos enviado un enlace a ${authEmail.value.trim()}. Ábrelo para activar tu cuenta y regresa aquí.`;
+                    authSubtitle.textContent = '¡Casi listo! Confirma tu correo.';
+                    authError.textContent = '';
+                    authSubmitBtn.textContent = 'Ya lo confirmé — Entrar';
+                    authSubmitBtn.disabled = false;
+                    return;
+                }
+
+                // Flujo clásico con código de 6 dígitos (por si acaso)
                 if (res.status === 202 && data.status === 'verification_required') {
                     authStep = 'verify';
                     authEmail.disabled = true;
                     registerFields.hidden = true;
                     verificationFields.hidden = false;
+                    authCode.style.display = '';
                     authCode.disabled = false;
                     authCode.required = true;
                     authCode.focus();
@@ -2120,6 +2157,7 @@
                     authError.textContent = data.message;
                     return;
                 }
+
                 if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo iniciar la sesión.');
                 fillProfile(data.profile);
                 hideAuth();
@@ -2127,7 +2165,9 @@
                 authError.textContent = error.message || 'No se pudo conectar con el servidor.';
             } finally {
                 authSubmitBtn.disabled = false;
-                authSubmitBtn.textContent = authStep === 'verify' ? 'Verificar correo' : (authMode === 'register' ? 'Crear cuenta' : 'Entrar');
+                authSubmitBtn.textContent = authStep === 'verify' ? 'Verificar correo'
+                    : authStep === 'supabase_pending' ? 'Ya lo confirmé — Entrar'
+                    : (authMode === 'register' ? 'Crear cuenta' : 'Entrar');
             }
         });
 
