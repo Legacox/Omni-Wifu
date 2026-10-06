@@ -19,6 +19,13 @@ from bottle import Bottle, HTTPError, request, response, static_file
 from google import genai
 from google.genai import types
 
+# Importación opcional de Supabase (requiere: pip install supabase)
+try:
+    from supabase import create_client, Client as SupabaseClient
+except ImportError:
+    create_client = None
+    SupabaseClient = None
+
 # Intentar cargar controladores de PostgreSQL (compatibilidad con psycopg v3 y psycopg2)
 try:
     import psycopg
@@ -60,6 +67,23 @@ DATABASE_URL = _raw_db_url
 
 # Modo PostgreSQL si existe DATABASE_URL y algún driver disponible
 USING_POSTGRES = bool(DATABASE_URL) and (psycopg is not None or psycopg2 is not None)
+
+# --- CLIENTE SUPABASE ---
+_supabase_url = os.environ.get("SUPABASE_URL", "").strip()
+_supabase_key = os.environ.get("SUPABASE_KEY", "").strip()
+supabase_client: "SupabaseClient | None" = None
+if create_client and _supabase_url and _supabase_key:
+    try:
+        supabase_client = create_client(_supabase_url, _supabase_key)
+        print(f"[Supabase] Cliente inicializado correctamente ({_supabase_url})")
+    except Exception as _sb_err:
+        print(f"[Supabase] Error al inicializar el cliente: {_sb_err}")
+        supabase_client = None
+else:
+    if not create_client:
+        print("[Supabase] Paquete 'supabase' no instalado — Auth de Supabase desactivado.")
+    elif not (_supabase_url and _supabase_key):
+        print("[Supabase] SUPABASE_URL / SUPABASE_KEY no configuradas — Auth de Supabase desactivado.")
 
 SESSION_COOKIE = "nino_session"
 TERMS_VERSION = "2026-10-05"
@@ -804,6 +828,20 @@ def api_register():
                        (email, username, hash_password(password), hashlib.sha256(code.encode()).hexdigest(), time.time() + 600, TERMS_VERSION))
     except INTEGRITY_ERRORS:
         return json_response({"status": "error", "message": "Ya hay una verificación pendiente para ese correo."}, 409)
+
+    # Registro paralelo en Supabase Auth (si está configurado)
+    if supabase_client is not None:
+        try:
+            supabase_client.auth.sign_up({
+                "email": email,
+                "password": password,
+                "options": {"data": {"username": username}},
+            })
+            print(f"[Supabase] Usuario registrado en Auth: {email}")
+        except Exception as sb_err:
+            # No bloqueamos el flujo local si Supabase falla
+            print(f"[Supabase] Advertencia al registrar en Auth: {sb_err}")
+
     try:
         send_verification_email(email, code)
     except Exception:
@@ -858,7 +896,26 @@ def api_login():
                    (token, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), TERMS_VERSION, user["id"]))
         user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
     set_session_cookie(token)
-    return json_response({"status": "ok", "profile": public_profile(user)})
+
+    # Inicio de sesión paralelo en Supabase Auth (si está configurado)
+    supabase_access_token = None
+    if supabase_client is not None:
+        try:
+            sb_response = supabase_client.auth.sign_in_with_password({
+                "email": user["email"],
+                "password": password,
+            })
+            if sb_response and getattr(sb_response, "session", None):
+                supabase_access_token = sb_response.session.access_token
+                print(f"[Supabase] Login correcto para: {user['email']}")
+        except Exception as sb_err:
+            # No bloqueamos el login local si Supabase falla
+            print(f"[Supabase] Advertencia en login: {sb_err}")
+
+    result = {"status": "ok", "profile": public_profile(user)}
+    if supabase_access_token:
+        result["supabase_access_token"] = supabase_access_token
+    return json_response(result)
 
 
 @server_app.route("/api/logout", method=["POST", "OPTIONS"])
