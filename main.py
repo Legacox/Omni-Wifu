@@ -917,6 +917,92 @@ def api_login():
         result["supabase_access_token"] = supabase_access_token
     return json_response(result)
 
+@server_app.route("/api/supabase-confirm", method=["POST", "OPTIONS"])
+def api_supabase_confirm():
+    """
+    Endpoint llamado por el frontend cuando detecta un #access_token de Supabase
+    en la URL (enlace de confirmación de correo).
+
+    Flujo:
+    1. Verifica el token con supabase_client.auth.get_user().
+    2. Busca al usuario en la BD local por email.
+    3. Si existe → emite cookie de sesión local y devuelve el perfil.
+    4. Si no existe → crea una cuenta mínima con los datos de Supabase y luego
+       emite la cookie y devuelve el perfil.
+    5. Si Supabase no está configurado → devuelve 501.
+    """
+    if request.method == "OPTIONS":
+        return json_response({})
+
+    if supabase_client is None:
+        return json_response({"status": "error", "message": "Supabase no está configurado en el servidor."}, 501)
+
+    data = request_data()
+    access_token = str(data.get("access_token", "")).strip()
+    if not access_token:
+        return json_response({"status": "error", "message": "Token de acceso no proporcionado."}, 400)
+
+    # 1. Verificar el token con Supabase
+    try:
+        sb_user_response = supabase_client.auth.get_user(access_token)
+        sb_user = getattr(sb_user_response, "user", None)
+        if not sb_user:
+            raise ValueError("Respuesta vacía de Supabase")
+    except Exception as sb_err:
+        print(f"[Supabase] Token inválido en /api/supabase-confirm: {sb_err}")
+        return json_response({"status": "error", "message": "El enlace de confirmación no es válido o ya caducó."}, 401)
+
+    email = (getattr(sb_user, "email", "") or "").strip().lower()
+    if not email:
+        return json_response({"status": "error", "message": "No se pudo obtener el correo del token de Supabase."}, 400)
+
+    # Intentar leer el username guardado en user_metadata (lo enviamos al registrar)
+    meta = getattr(sb_user, "user_metadata", {}) or {}
+    suggested_username = str(meta.get("username", "")).strip()
+
+    with db_connection() as conn:
+        user = db_execute(conn, "SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
+
+        if not user:
+            # 4. Crear cuenta local mínima si no existía
+            # Generar un username único a partir de la parte local del email si no hay metadata
+            base_username = suggested_username or re.sub(r"[^A-Za-z0-9_.-]", "_", email.split("@")[0])[:32] or "usuario"
+            # Asegurarse de que el username no colisiona
+            candidate = base_username[:32]
+            suffix = 1
+            while db_execute(conn, "SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (candidate,)).fetchone():
+                candidate = f"{base_username[:28]}_{suffix}"
+                suffix += 1
+            # Contraseña aleatoria segura (el usuario nunca la verá; puede cambiarla si quiere)
+            random_password_hash = hash_password(secrets.token_urlsafe(32))
+            token_local = new_session_token()
+            now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            try:
+                db_execute(
+                    conn,
+                    "INSERT INTO users (username, email, password_hash, session_token, email_verified, "
+                    "terms_accepted_at, terms_version, tts_provider) VALUES (?, ?, ?, ?, 1, ?, ?, 'gemini')",
+                    (candidate, email, random_password_hash, token_local, now_str, TERMS_VERSION),
+                )
+            except INTEGRITY_ERRORS:
+                return json_response({"status": "error", "message": "Ya existe una cuenta con ese correo."}, 409)
+            user = db_execute(conn, "SELECT * FROM users WHERE session_token = ?", (token_local,)).fetchone()
+        else:
+            # 3. Usuario ya existe → actualizar sesión
+            token_local = new_session_token()
+            now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            db_execute(
+                conn,
+                "UPDATE users SET session_token = ?, terms_accepted_at = ?, terms_version = ?, "
+                "email_verified = 1 WHERE id = ?",
+                (token_local, now_str, TERMS_VERSION, user["id"]),
+            )
+            user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+
+    set_session_cookie(token_local)
+    print(f"[Supabase] Confirmación exitosa para: {email}")
+    return json_response({"status": "ok", "profile": public_profile(user)}, 200)
+
 
 @server_app.route("/api/logout", method=["POST", "OPTIONS"])
 def api_logout():

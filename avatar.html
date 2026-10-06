@@ -2166,8 +2166,85 @@
             showAuth();
         });
 
+        // ── DETECCIÓN DE ENLACE DE CONFIRMACIÓN DE SUPABASE ──────────────────────
+        // Cuando Supabase redirige tras confirmar el correo, añade a la URL un
+        // fragmento con access_token (y otros parámetros).  Lo detectamos aquí,
+        // limpiamos el hash para que no quede visible, y usamos el token para
+        // iniciar sesión automáticamente sin mostrar el formulario de registro.
+
+        async function handleSupabaseConfirmLink() {
+            const hash = window.location.hash;
+            if (!hash || !hash.includes('access_token')) return false;
+
+            // Parsear los parámetros del fragmento
+            const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+            const accessToken = params.get('access_token');
+            const tokenType   = params.get('token_type') || 'bearer';
+            const refreshToken = params.get('refresh_token') || '';
+            const type         = params.get('type') || '';    // 'signup' | 'recovery' | etc.
+
+            if (!accessToken) return false;
+
+            // Limpiar el fragmento de la URL inmediatamente para no exponer el token
+            history.replaceState(null, '', window.location.pathname + window.location.search);
+
+            // Mostrar estado de carga en el overlay de auth
+            authOverlay.classList.add('visible');
+            authOverlay.setAttribute('aria-hidden', 'false');
+            authSubtitle.textContent = '¡Confirmando tu cuenta…';
+            authError.textContent    = '';
+            authSubmitBtn.disabled   = true;
+            authSubmitBtn.textContent = 'Confirmando…';
+
+            try {
+                // Enviar el token al backend para verificar la sesión con Supabase
+                const { res, data } = await apiFetch('/api/supabase-confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        access_token:  accessToken,
+                        refresh_token: refreshToken,
+                        token_type:    tokenType,
+                        type:          type,
+                    }),
+                });
+
+                if (res.ok && data.status === 'ok') {
+                    // Sesión confirmada: cargar perfil y entrar directamente
+                    fillProfile(data.profile);
+                    hideAuth();
+                    // Pequeño saludo de bienvenida en el bocadillo
+                    if (type === 'signup') {
+                        showBubble('¡Cuenta confirmada! ¡Bienvenido/a!', false);
+                    }
+                    return true;
+                }
+
+                // El backend no pudo validar el token — mostrar error amigable
+                authError.textContent = data.message || 'No se pudo confirmar la cuenta. Inicia sesión manualmente.';
+                authSubmitBtn.disabled  = false;
+                authSubmitBtn.textContent = 'Entrar';
+                return false;
+
+            } catch (_) {
+                authError.textContent = 'No se pudo conectar con el servidor. Inicia sesión manualmente.';
+                authSubmitBtn.disabled  = false;
+                authSubmitBtn.textContent = 'Entrar';
+                return false;
+            }
+        }
+
+        // Punto de entrada de sesión: primero intenta el enlace de Supabase,
+        // y si no, comprueba la cookie de sesión local habitual.
+        async function initSession() {
+            const handledBySupabase = await handleSupabaseConfirmLink();
+            if (!handledBySupabase) {
+                await loadSession();
+            }
+        }
+
         // Comprueba la cookie al abrir la página; la sesión persiste durante 30 días.
-        loadSession();
+        initSession();
 
         function openConfigPanel() {
             configPanel.classList.add('open');
