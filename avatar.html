@@ -179,11 +179,48 @@
             left: 50%;
             transform: translateX(-50%);
             display: flex;
+            flex-direction: column;
             align-items: center;
             gap: 14px;
             width: 90%;
             max-width: 580px;
             z-index: 20;
+        }
+
+        .chat-mode-switch {
+            align-self: center;
+            display: flex;
+            gap: 3px;
+            padding: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.78);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.58);
+            backdrop-filter: blur(24px) saturate(190%);
+            -webkit-backdrop-filter: blur(24px) saturate(190%);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.09), inset 0 1px 2px rgba(255, 255, 255, 0.9);
+        }
+        .chat-mode-option {
+            min-height: 34px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: rgba(28, 28, 30, 0.72);
+            font: 700 12px 'Plus Jakarta Sans', sans-serif;
+            cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .chat-mode-option:hover { color: #1C1C1E; }
+        .chat-mode-option.active {
+            background: #FFFFFF;
+            color: #1C1C1E;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), inset 0 0 0 1px rgba(255, 51, 102, 0.16);
+        }
+        .chat-dock-controls {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
         }
 
         .glass-input-bar {
@@ -271,6 +308,11 @@
             color: #1C1C1E;
             transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
             position: relative;
+        }
+        @media (max-width: 520px) {
+            .glass-dock { bottom: 18px; width: 94%; gap: 9px; }
+            .chat-dock-controls { gap: 9px; }
+            .chat-mode-option { min-height: 32px; padding: 0 11px; font-size: 11px; }
         }
         .glass-mic-btn:hover {
             transform: scale(1.06);
@@ -604,6 +646,16 @@
             pointer-events: none;
             transition: all .3s cubic-bezier(.2,.8,.2,1);
         }
+        #profile-close-btn {
+            position: sticky;
+            top: -24px;
+            z-index: 5;
+            display: flex;
+            margin: -12px -12px -32px auto;
+            background: rgba(255,255,255,.9);
+            border: 1px solid rgba(28,28,30,.08);
+            box-shadow: 0 4px 12px rgba(28,28,30,.1);
+        }
         .profile-panel.open { transform: scale(1) translateY(0); opacity: 1; pointer-events: auto; }
         .profile-user-card, .profile-section {
             background: rgba(255,255,255,.58);
@@ -624,7 +676,22 @@
             background: rgba(255,255,255,.9); transition: border-color .2s, box-shadow .2s;
             user-select: text;
         }
-        .profile-input:focus, .profile-select:focus { border-color: #FF3366; box-shadow: 0 0 0 3px rgba(255,51,102,.12); }
+        .profile-select-native { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
+        .profile-input:focus { border-color: #FF3366; box-shadow: 0 0 0 3px rgba(255,51,102,.12); }
+        .profile-choice { position:relative; width:100%; }
+        .profile-choice-trigger { width:100%; min-height:42px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 13px; border:1px solid rgba(28,28,30,.1); border-radius:13px; color:#1C1C1E; background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(255,248,250,.9)); box-shadow:0 4px 13px rgba(28,28,30,.045),inset 0 1px 0 rgba(255,255,255,.95); text-align:left; cursor:pointer; font:700 12px 'Plus Jakarta Sans',sans-serif; transition:border-color .2s,box-shadow .2s,transform .2s; }
+        .profile-choice-trigger:hover,.profile-choice.open .profile-choice-trigger { border-color:rgba(255,51,102,.48); box-shadow:0 5px 16px rgba(255,51,102,.1),inset 0 1px 0 #fff; }
+        .profile-choice-trigger:focus-visible { outline:0; border-color:#FF3366; box-shadow:0 0 0 3px rgba(255,51,102,.14); }
+        .profile-choice-value { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .profile-choice-chevron { flex:0 0 18px; width:18px; height:18px; display:grid; place-items:center; border-radius:6px; color:#FF3366; background:rgba(255,51,102,.08); transition:transform .2s; }
+        .profile-choice.open .profile-choice-chevron { transform:rotate(180deg); }
+        .profile-choice-menu { position:fixed; z-index:160; display:grid; gap:5px; padding:7px; border:1px solid rgba(255,255,255,.92); border-radius:16px; background:rgba(255,255,255,.94); box-shadow:0 18px 45px rgba(28,28,30,.18),inset 0 1px 0 #fff; backdrop-filter:blur(24px) saturate(170%); -webkit-backdrop-filter:blur(24px) saturate(170%); overflow:auto; opacity:0; transform:translateY(-4px) scale(.985); pointer-events:none; transition:opacity .14s ease,transform .14s ease; }
+        .profile-choice-menu.visible { opacity:1; transform:translateY(0) scale(1); pointer-events:auto; }
+        .profile-choice-option { width:100%; min-height:38px; display:flex; align-items:center; gap:9px; padding:9px 11px; border:1px solid transparent; border-radius:10px; color:rgba(28,28,30,.83); background:transparent; text-align:left; cursor:pointer; font:650 11px/1.4 'Plus Jakarta Sans',sans-serif; transition:background .16s,border-color .16s,color .16s; }
+        .profile-choice-option:hover,.profile-choice-option:focus-visible { outline:0; color:#1C1C1E; background:linear-gradient(100deg,rgba(255,51,102,.11),rgba(255,142,115,.09)); border-color:rgba(255,51,102,.15); }
+        .profile-choice-option[aria-selected="true"] { color:#c92350; background:rgba(255,51,102,.09); font-weight:800; }
+        .profile-choice-check { flex:0 0 18px; width:18px; height:18px; display:grid; place-items:center; border-radius:6px; color:transparent; background:rgba(28,28,30,.055); font-size:11px; }
+        .profile-choice-option[aria-selected="true"] .profile-choice-check { color:#fff; background:linear-gradient(135deg,#FF3366,#ff8e73); }
         .profile-help { margin: 7px 0 0; color: rgba(60,60,67,.65); font-size: 11px; line-height: 1.45; }
         .key-row { margin-top: 9px; }
         .key-row label { display: flex; justify-content: space-between; margin: 0 0 5px; font-size: 11px; font-weight: 800; color: #1C1C1E; }
@@ -659,6 +726,18 @@
         .auth-submit { width: 100%; margin-top: 17px; padding: 12px; border: none; border-radius: 14px; color: #fff; background: #1C1C1E; cursor: pointer; font: 800 13px 'Plus Jakarta Sans', sans-serif; transition: .2s; }
         .auth-submit:hover { background: #FF3366; transform: translateY(-2px); box-shadow: 0 8px 17px rgba(255,51,102,.22); }
         .auth-error { min-height: 17px; margin: 10px 2px 0; color: #d92051; font-size: 11px; font-weight: 700; }
+        .auth-card { max-height: calc(100vh - 32px); overflow-y: auto; }
+        .auth-extra[hidden] { display: none !important; }
+        .auth-check { display:flex; align-items:flex-start; gap:9px; margin-top:14px; color:rgba(28,28,30,.76); font-size:11px; font-weight:600; line-height:1.5; }
+        .auth-check input { accent-color:#FF3366; margin-top:2px; }
+        .auth-link { color:#d92051; font-weight:800; text-decoration:underline; cursor:pointer; }
+        .terms-dialog { position:fixed; inset:0; z-index:120; display:none; align-items:center; justify-content:center; padding:18px; background:rgba(16,19,25,.56); backdrop-filter:blur(8px); }
+        .terms-dialog.visible { display:flex; }
+        .terms-card { position:relative; width:min(620px,100%); max-height:85vh; overflow:auto; padding:26px; border-radius:24px; background:#fff; color:#1C1C1E; box-shadow:0 25px 80px rgba(0,0,0,.25); font:500 13px/1.65 'Plus Jakarta Sans',sans-serif; }
+        .terms-card h2 { margin:0 0 14px; font-size:22px; }
+        .terms-card h3 { margin:18px 0 5px; font-size:14px; }
+        .terms-close { position:sticky; top:0; z-index:4; display:flex; align-items:center; justify-content:center; float:right; width:36px; height:36px; margin:-10px -10px -26px auto; border:1px solid rgba(28,28,30,.08); border-radius:50%; color:#1C1C1E; background:rgba(255,255,255,.94); box-shadow:0 4px 14px rgba(28,28,30,.12); font-size:24px; cursor:pointer; backdrop-filter:blur(10px); }
+        .terms-close:hover { color:#fff; background:#FF3366; }
         @media (max-width: 768px) { .profile-toggle-btn { top: 18px; right: 18px; } .profile-panel { top: 18px; right: 18px; max-height: calc(100vh - 36px); } }
     </style>
     <script type="importmap">
@@ -724,11 +803,35 @@
             <div class="auth-tabs"><button class="auth-tab active" type="button" data-auth-mode="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-mode="register">Crear cuenta</button></div>
             <label class="profile-label" for="auth-username">Nombre de usuario</label>
             <input class="profile-input" id="auth-username" autocomplete="username" required minlength="3" maxlength="32" placeholder="Tu nombre">
+            <div class="auth-extra" id="register-fields" hidden>
+                <label class="profile-label" for="auth-email">Correo electrónico</label>
+                <input class="profile-input" id="auth-email" type="email" autocomplete="email" maxlength="254" placeholder="tu@correo.com" disabled>
+            </div>
             <label class="profile-label" for="auth-password">Contraseña</label>
             <input class="profile-input" id="auth-password" type="password" autocomplete="current-password" required minlength="8" placeholder="Mínimo 8 caracteres">
+            <div class="auth-extra" id="terms-accept-row">
+                <label class="auth-check"><input id="terms-accept" type="checkbox" required><span>He leído y acepto los <a class="auth-link" id="terms-open">términos y condiciones</a> y la información sobre mis datos.</span></label>
+            </div>
+            <div class="auth-extra" id="verification-fields" hidden>
+                <label class="profile-label" for="auth-code">Código de verificación</label>
+                <input class="profile-input" id="auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="Código de 6 dígitos" disabled>
+            </div>
             <button class="auth-submit" id="auth-submit-btn" type="submit">Entrar</button>
             <div class="auth-error" id="auth-error" role="alert"></div>
         </form>
+    </div>
+    <div class="terms-dialog" id="terms-dialog" role="dialog" aria-modal="true" aria-labelledby="terms-title">
+        <article class="terms-card"><button class="terms-close" id="terms-close" type="button" aria-label="Cerrar">&times;</button>
+            <h2 id="terms-title">Términos y condiciones · Nino AI</h2>
+            <p><strong>Versión 05/10/2026.</strong> Al crear una cuenta o iniciar sesión confirmas que has leído y aceptas estas condiciones.</p>
+            <h3>1. Servicio</h3><p>Nino AI ofrece una experiencia conversacional con personajes virtuales, generación de respuestas y síntesis de voz. Es un proyecto de entretenimiento; las respuestas pueden ser inexactas y no sustituyen asesoramiento profesional.</p>
+            <h3>2. Cuenta y uso responsable</h3><p>Debes proporcionar un nombre único, un correo válido y mantener la confidencialidad de tu contraseña. No uses el servicio para actividades ilícitas, perjudiciales o que vulneren derechos de terceros. Podemos suspender cuentas ante abusos o riesgos de seguridad.</p>
+            <h3>3. Datos y claves</h3><p>La aplicación almacena tu nombre, correo verificado, contraseña protegida mediante hash, sesión y preferencias. Si añades claves de Gemini o Fish Audio, se guardan vinculadas a tu cuenta para prestar la función elegida. No introduzcas datos sensibles. Las claves personales se envían al proveedor correspondiente cuando usas su servicio.</p>
+            <h3>4. Proveedores y alojamiento</h3><p>El servidor puede alojarse en Render y usar su infraestructura para procesar solicitudes y almacenar datos. La configuración puede utilizar PostgreSQL gestionado o, en desarrollo, SQLite. Las conversaciones pueden enviarse a Google Gemini y los textos de voz a Fish Audio o al servicio Edge TTS según tu configuración. Estos proveedores tratan datos conforme a sus propias condiciones y políticas.</p>
+            <h3>5. Disponibilidad y responsabilidad</h3><p>El servicio se ofrece tal cual y puede cambiar, interrumpirse o contener errores. En la medida permitida por la ley, Nino AI no garantiza disponibilidad continua ni responde por daños derivados del uso indebido, fallos de terceros o contenido generado automáticamente.</p>
+            <h3>6. Privacidad, conservación y contacto</h3><p>Los datos se usan para administrar la cuenta, prestar las funciones, verificar el correo y proteger el servicio. Se conservarán mientras la cuenta esté activa o sea necesario para estos fines. Para solicitar acceso o eliminación, contacta con el responsable del sitio a través del canal de contacto publicado en la web. La identidad y datos de contacto del responsable deben publicarse antes de ofrecer el servicio al público.</p>
+            <h3>7. Cambios y legislación</h3><p>Estas condiciones pueden actualizarse; se solicitará aceptación de la versión vigente. Se aplicará la normativa imperativa que corresponda al usuario y al responsable del servicio.</p>
+        </article>
     </div>
 
     <!-- Botón Flotante para el Panel de Configuración -->
@@ -788,11 +891,18 @@
 
     <!-- Liquid Glass Dock Inferior -->
     <div class="glass-dock">
-        <div class="glass-input-bar">
-            <input type="text" class="glass-input" id="chat-input" placeholder="Escribe a Nino..." autocomplete="off">
-            <button class="glass-send-btn" id="send-btn" title="Enviar">➤</button>
+        <div class="chat-mode-switch" id="chat-mode-switch" role="group" aria-label="Modo de respuesta">
+            <button class="chat-mode-option active" type="button" data-mode="conversacion" aria-pressed="true">Conversación</button>
+            <button class="chat-mode-option" type="button" data-mode="pregunta" aria-pressed="false">Pregunta</button>
+            <button class="chat-mode-option" type="button" data-mode="automatico" aria-pressed="false">Automático</button>
         </div>
-        <button class="glass-mic-btn" id="mic-btn" title="Hablar por micrófono">🎤</button>
+        <div class="chat-dock-controls">
+            <div class="glass-input-bar">
+                <input type="text" class="glass-input" id="chat-input" placeholder="Escribe a Nino..." autocomplete="off">
+                <button class="glass-send-btn" id="send-btn" title="Enviar">➤</button>
+            </div>
+            <button class="glass-mic-btn" id="mic-btn" title="Hablar por micrófono">🎤</button>
+        </div>
     </div>
 
     <script type="module">
@@ -810,7 +920,9 @@
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        // Cap the drawing resolution: full devicePixelRatio is costly on phones
+        // and adds little visual detail to a softly lit VRM scene.
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
         document.body.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
@@ -826,8 +938,20 @@
         scene.add(new THREE.AmbientLight(0xffffff, 0.65));
 
         let currentVrm = undefined;
+        let modelLoadId = 0;
         const loader = new GLTFLoader();
         loader.register((parser) => new VRMLoaderPlugin(parser));
+
+        function disposeVrm(vrm) {
+            if (!vrm) return;
+            scene.remove(vrm.scene);
+            vrm.scene.traverse((object) => {
+                if (!object.isMesh) return;
+                object.geometry?.dispose();
+                const materials = Array.isArray(object.material) ? object.material : [object.material];
+                materials.filter(Boolean).forEach((material) => material.dispose());
+            });
+        }
 
         // ── Nombre de la waifu activa en la escena (sincronizado con la UI) ──
         let activeWaifuAnim = 'nino';
@@ -882,7 +1006,8 @@
 
                 const stepsPerCycle = isMiku ? 6.5 : 5.5;
                 const phase = walkProgress * Math.PI * stepsPerCycle;
-                const stride = Math.sin(phase);
+                // Fade the gait in and out so the final step settles instead of snapping.
+                const stride = Math.sin(phase) * Math.sin(Math.PI * walkProgress);
                 const humanoid = vrm.humanoid;
                 const sign = vrm._isVRM1 ? -1 : 1;
 
@@ -936,34 +1061,25 @@
         };
 
         function cargarWaifu(waifuName) {
-            if (currentVrm) {
-                scene.remove(currentVrm.scene);
-                currentVrm.scene.traverse((object) => {
-                    if (object.isMesh) {
-                        object.geometry.dispose();
-                        if (Array.isArray(object.material)) {
-                            object.material.forEach((m) => m.dispose());
-                        } else {
-                            object.material.dispose();
-                        }
-                    }
-                });
-                currentVrm = undefined;
-                walkEntrance.reset();
-                hairPhysics.reset();
-                clothPhysics.reset();
-                gestureSystem.reset();
-                expressionController.reset();
-                animate._warned = false;
-            }
-
+            const requestId = ++modelLoadId;
             const modelConfig = waifuModels[waifuName] || waifuModels.nino;
             const modelFile = modelConfig.file;
             loader.load(
                 modelFile,
                 (gltf) => {
                     const vrm = gltf.userData.vrm;
+                    // Ignore stale responses when the user switches characters quickly.
+                    if (requestId !== modelLoadId) { disposeVrm(vrm); return; }
+                    disposeVrm(currentVrm);
+                    walkEntrance.reset();
+                    hairPhysics.reset();
+                    clothPhysics.reset();
+                    physicsAccumulator = 0;
+                    gestureSystem.reset();
+                    expressionController.reset();
+                    animate._warned = false;
                     currentVrm = vrm;
+                    activeWaifuAnim = waifuName;
                     scene.add(vrm.scene);
 
                     // Entra mirando hacia la izquierda (dirección del recorrido).
@@ -1002,7 +1118,9 @@
                     clothPhysics.init(vrm);
                 },
                 () => {},
-                (err) => console.error('Error cargando VRM:', err)
+                (err) => {
+                    if (requestId === modelLoadId) console.error('Error cargando VRM:', err);
+                }
             );
         }
 
@@ -1044,6 +1162,12 @@
             init(vrm) {
                 this.chains = [];
                 if (!vrm) return;
+                // three-vrm already simulates configured secondary motion on update.
+                // Avoid applying a second spring system to those same bones.
+                if (vrm.springBoneManager) return;
+                const head = vrm.humanoid?.getNormalizedBoneNode('head');
+                this.headPrevRotY = head?.rotation.y || 0;
+                this.headPrevRotX = head?.rotation.x || 0;
                 const keys = ['hair','twintail','ahoge','braid','pigtail','ponytail','bang','fringe','lock','strand'];
                 vrm.scene.traverse((node) => {
                     // VRoid exporta los huesos secundarios (pelo/ropa) con el
@@ -1056,7 +1180,9 @@
                             vel: new THREE.Vector3(),
                             stiffness: 0.10 + Math.random() * 0.10,
                             damping: 0.84,
-                            gravity: 0.0015
+                            gravity: 0.0015,
+                            baseRX: node.rotation.x,
+                            baseRZ: node.rotation.z
                         });
                     }
                 });
@@ -1076,8 +1202,8 @@
                     c.offset.add(c.vel);
                     if (c.offset.length() > 0.08) c.offset.normalize().multiplyScalar(0.08);
                     if (c.bone) {
-                        c.bone.rotation.z += c.offset.x * 0.45;
-                        c.bone.rotation.x += c.offset.z * 0.35;
+                        c.bone.rotation.z = c.baseRZ + c.offset.x * 0.45;
+                        c.bone.rotation.x = c.baseRX + c.offset.z * 0.35;
                     }
                 });
             },
@@ -1093,6 +1219,7 @@
             init(vrm) {
                 this.bones = [];
                 if (!vrm) return;
+                if (vrm.springBoneManager) return;
                 const keys = ['skirt','dress','frill','sleeve','ribbon','bow','coat','cape','cloth','robe','hem','tie','scarf'];
                 vrm.scene.traverse((node) => {
                     if (keys.some(k => node.name.toLowerCase().includes(k))) {
@@ -1232,6 +1359,17 @@
                 const pool = isNino ? this.gesturesNino : this.gesturesMiku;
                 const poolSize = pool.length;
 
+                if (speaking > 0.1 && !this.wasSpeaking && this.pendingIntent) {
+                    const intentGestures = isNino
+                        ? { explain: 0, playful: 1, reflect: 2, emphatic: 3, warm: 0 }
+                        : { explain: 9, playful: 8, reflect: 6, emphatic: 5, warm: 6 };
+                    this.idx = intentGestures[this.pendingIntent] ?? this.idx;
+                    this.timer = 0;
+                    this.interval = 2.6;
+                    this.pendingIntent = null;
+                }
+                this.wasSpeaking = speaking > 0.1;
+
                 // Mientras habla: rota gestos cada 2-4 s con variación de personalidad
                 if (speaking > 0.1) {
                     this.timer += delta;
@@ -1275,7 +1413,7 @@
                     bone.rotation.x += (g[key].x - bone.rotation.x) * spF;
                 }
             },
-            reset() { this.idx = 8; this.timer = 0; }
+            reset() { this.idx = 8; this.timer = 0; this.wasSpeaking = false; this.pendingIntent = null; }
         };
 
         // ══════════════════════════════════════════════════════════════
@@ -1335,6 +1473,22 @@
             const dot = document.getElementById('status-dot');
             if (dot) { val ? dot.classList.add('speaking') : dot.classList.remove('speaking'); }
         };
+        window.setNinoSpeechText = function(text) {
+            const message = String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            if (/\b(que tal|como estas|hola|encantad|me alegra|genial|increible|feliz|jaja|jeje)\b/.test(message)) {
+                gestureSystem.pendingIntent = 'warm';
+            } else if (/\b(lo siento|entiendo|tranquil|preocup|dificil|aqui estoy|te escucho|animo|cuidate)\b/.test(message)) {
+                gestureSystem.pendingIntent = 'reflect';
+            } else if (/\b(por que|como|cuando|donde|que opinas|crees que)\b/.test(message) || message.includes('?')) {
+                gestureSystem.pendingIntent = 'reflect';
+            } else if (/!|\b(oye|basta|claro que|por supuesto|obvio|sin duda|definitivamente)\b/.test(message)) {
+                gestureSystem.pendingIntent = activeWaifuAnim === 'nino' ? 'emphatic' : 'playful';
+            } else if (/\b(primero|despues|por ejemplo|significa|consiste|paso|explico|en resumen|porque)\b/.test(message)) {
+                gestureSystem.pendingIntent = 'explain';
+            } else {
+                gestureSystem.pendingIntent = null;
+            }
+        };
         window.setNinoListening = function(val) {
             isListening = val;
             if (val) idleRestless.notify();
@@ -1350,6 +1504,8 @@
         //  MAIN ANIMATION LOOP — con lógica de personalidad por waifu
         // ══════════════════════════════════════════════════════════════
         const clock = new THREE.Clock();
+        const physicsStep = 1 / 60;
+        let physicsAccumulator = 0;
         // Parpadeo
         let blinkTimer = 0, nextBlink = 3.2, isBlinking = false, isDouble = false, doubleStage = 0;
         // Microexpresiones
@@ -1379,7 +1535,7 @@
                 const L = listenSmooth;
 
                 // ── Idle restless ──
-                const IR = idleRestless.update(delta, isSpeaking, waifu);
+                const IR = idleRestless.update(delta, isSpeaking || isListening, waifu);
                 const rs = IR.rs;
 
                 // ── Bones ──
@@ -1624,16 +1780,15 @@
                     }
                 }
 
-                // ── 10. Física de pelo ──
-                hairPhysics.update(currentVrm, delta, head);
-
-                // ── 11. Física de ropa ──
-                clothPhysics.update(currentVrm, delta, hips, time);
-
-                // ── 12. Expression flush ──
-                expressionController.update(currentVrm, delta);
-
-                currentVrm.update(delta);
+                // Advance spring physics at a steady cadence to avoid frame-rate dependent jitter.
+                physicsAccumulator = Math.min(physicsAccumulator + delta, physicsStep * 3);
+                while (physicsAccumulator >= physicsStep) {
+                    hairPhysics.update(currentVrm, physicsStep, head);
+                    clothPhysics.update(currentVrm, physicsStep, hips, time);
+                    expressionController.update(currentVrm, physicsStep);
+                    currentVrm.update(physicsStep);
+                    physicsAccumulator -= physicsStep;
+                }
 
             } catch(err) {
                 if (!animate._warned) {
@@ -1671,6 +1826,12 @@
         const authForm = document.getElementById('auth-form');
         const authUsername = document.getElementById('auth-username');
         const authPassword = document.getElementById('auth-password');
+        const authEmail = document.getElementById('auth-email');
+        const authCode = document.getElementById('auth-code');
+        const registerFields = document.getElementById('register-fields');
+        const verificationFields = document.getElementById('verification-fields');
+        const termsAccept = document.getElementById('terms-accept');
+        const termsDialog = document.getElementById('terms-dialog');
         const authError = document.getElementById('auth-error');
         const authSubtitle = document.getElementById('auth-subtitle');
         const authSubmitBtn = document.getElementById('auth-submit-btn');
@@ -1686,12 +1847,16 @@
         const profileSaveBtn = document.getElementById('profile-save-btn');
         const profileLogoutBtn = document.getElementById('profile-logout-btn');
         const profileNotice = document.getElementById('profile-notice');
+        const chatModeOptions = document.querySelectorAll('.chat-mode-option');
 
         let activeWaifu = 'nino';
         let isRecording = false;
         let currentAudio = null;
+        let latestSpeechRequest = 0;
         let authMode = 'login';
+        let authStep = 'credentials';
         let profile = null;
+        let activeChatMode = 'conversacion';
 
         const waifuDetails = {
             nino: {
@@ -1717,6 +1882,135 @@
             return { res, data };
         }
 
+        const profileChoiceRefreshers = [];
+        function setupProfileChoice(select) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'profile-choice';
+            const trigger = document.createElement('button');
+            trigger.type = 'button';
+            trigger.className = 'profile-choice-trigger';
+            trigger.setAttribute('role', 'combobox');
+            trigger.setAttribute('aria-haspopup', 'listbox');
+            trigger.setAttribute('aria-expanded', 'false');
+            const label = document.querySelector(`label[for="${select.id}"]`);
+            if (label) {
+                if (!label.id) label.id = `${select.id}-label`;
+                trigger.setAttribute('aria-labelledby', label.id);
+            }
+            const value = document.createElement('span');
+            value.className = 'profile-choice-value';
+            const chevron = document.createElement('span');
+            chevron.className = 'profile-choice-chevron';
+            chevron.setAttribute('aria-hidden', 'true');
+            chevron.textContent = '⌄';
+            trigger.append(value, chevron);
+            const menu = document.createElement('div');
+            menu.className = 'profile-choice-menu';
+            menu.id = `${select.id}-options`;
+            menu.setAttribute('role', 'listbox');
+            menu.setAttribute('aria-label', label ? label.textContent.trim() : 'Selecciona una opción');
+            trigger.setAttribute('aria-controls', menu.id);
+            document.body.appendChild(menu);
+            select.parentNode.insertBefore(wrapper, select);
+            wrapper.appendChild(trigger);
+            wrapper.appendChild(select);
+            select.classList.add('profile-select-native');
+            select.setAttribute('aria-hidden', 'true');
+            select.tabIndex = -1;
+            let isOpen = false;
+            let optionButtons = [];
+
+            function refresh() {
+                const selected = select.options[select.selectedIndex];
+                value.textContent = selected ? selected.textContent.trim() : '';
+                menu.replaceChildren();
+                optionButtons = Array.from(select.options, (option, index) => {
+                    const item = document.createElement('button');
+                    item.type = 'button';
+                    item.className = 'profile-choice-option';
+                    item.setAttribute('role', 'option');
+                    item.setAttribute('aria-selected', String(index === select.selectedIndex));
+                    const check = document.createElement('span');
+                    check.className = 'profile-choice-check';
+                    check.setAttribute('aria-hidden', 'true');
+                    check.textContent = '✓';
+                    const text = document.createElement('span');
+                    text.textContent = option.textContent.trim();
+                    item.append(check, text);
+                    item.addEventListener('click', () => {
+                        select.value = option.value;
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                        refresh();
+                        closeMenu();
+                        trigger.focus();
+                    });
+                    menu.appendChild(item);
+                    return item;
+                });
+            }
+
+            function positionMenu() {
+                const rect = trigger.getBoundingClientRect();
+                const maxHeight = Math.min(280, window.innerHeight - 24);
+                const below = window.innerHeight - rect.bottom - 12;
+                const above = rect.top - 12;
+                const openAbove = below < Math.min(170, menu.scrollHeight) && above > below;
+                menu.style.left = `${Math.max(12, Math.min(rect.left, window.innerWidth - rect.width - 12))}px`;
+                menu.style.width = `${rect.width}px`;
+                menu.style.maxHeight = `${Math.max(100, Math.min(maxHeight, openAbove ? above : below))}px`;
+                menu.style.top = openAbove ? 'auto' : `${rect.bottom + 7}px`;
+                menu.style.bottom = openAbove ? `${window.innerHeight - rect.top + 7}px` : 'auto';
+            }
+
+            function openMenu() {
+                if (isOpen) return;
+                isOpen = true;
+                refresh();
+                wrapper.classList.add('open');
+                trigger.setAttribute('aria-expanded', 'true');
+                positionMenu();
+                menu.classList.add('visible');
+                const selectedIndex = Math.max(0, select.selectedIndex);
+                optionButtons[selectedIndex]?.scrollIntoView({ block: 'nearest' });
+            }
+            function closeMenu() {
+                isOpen = false;
+                wrapper.classList.remove('open');
+                trigger.setAttribute('aria-expanded', 'false');
+                menu.classList.remove('visible');
+            }
+            trigger.addEventListener('click', () => isOpen ? closeMenu() : openMenu());
+            trigger.addEventListener('keydown', event => {
+                if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    if (!isOpen) openMenu();
+                    const next = event.key === 'ArrowDown' ? Math.min(select.selectedIndex + 1, optionButtons.length - 1) : Math.max(select.selectedIndex - 1, 0);
+                    optionButtons[next]?.focus();
+                } else if ((event.key === 'Enter' || event.key === ' ') && !isOpen) {
+                    event.preventDefault();
+                    openMenu();
+                }
+            });
+            menu.addEventListener('keydown', event => {
+                const index = optionButtons.indexOf(document.activeElement);
+                if (event.key === 'Escape') { event.preventDefault(); closeMenu(); trigger.focus(); }
+                else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    const step = event.key === 'ArrowDown' ? 1 : -1;
+                    optionButtons[Math.max(0, Math.min(optionButtons.length - 1, index + step))]?.focus();
+                }
+            });
+            document.addEventListener('pointerdown', event => {
+                if (isOpen && !wrapper.contains(event.target) && !menu.contains(event.target)) closeMenu();
+            });
+            window.addEventListener('resize', () => isOpen && positionMenu());
+            window.addEventListener('scroll', () => isOpen && positionMenu(), true);
+            select.addEventListener('change', refresh);
+            refresh();
+            profileChoiceRefreshers.push(refresh);
+        }
+        document.querySelectorAll('.profile-select').forEach(setupProfileChoice);
+
         function showAuth() {
             profile = null;
             profilePanel.classList.remove('open');
@@ -1741,6 +2035,7 @@
                 ttsProviderSelect.value = nextProfile.tts_provider || 'gemini';
             }
             activeGeminiSlot.value = String(nextProfile.active_gemini_slot || 1);
+            profileChoiceRefreshers.forEach(refresh => refresh());
             geminiKeyInputs.forEach((input, index) => { input.value = (nextProfile.gemini_keys || [])[index] || ''; });
             fishKeyInput.value = nextProfile.fish_key || '';
         }
@@ -1776,6 +2071,14 @@
 
         authTabs.forEach(tab => tab.addEventListener('click', () => {
             authMode = tab.dataset.authMode;
+            authStep = 'credentials';
+            verificationFields.hidden = true;
+            authCode.disabled = true;
+            authCode.required = false;
+            registerFields.hidden = authMode !== 'register';
+            authEmail.disabled = authMode !== 'register';
+            authEmail.required = authMode === 'register';
+            termsAccept.checked = false;
             authTabs.forEach(item => item.classList.toggle('active', item === tab));
             const creating = authMode === 'register';
             authSubtitle.textContent = creating
@@ -1786,16 +2089,37 @@
             authError.textContent = '';
         }));
 
+        document.getElementById('terms-open').addEventListener('click', () => termsDialog.classList.add('visible'));
+        document.getElementById('terms-close').addEventListener('click', () => termsDialog.classList.remove('visible'));
+        termsDialog.addEventListener('click', event => { if (event.target === termsDialog) termsDialog.classList.remove('visible'); });
+
         authForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             authError.textContent = '';
             authSubmitBtn.disabled = true;
-            authSubmitBtn.textContent = authMode === 'register' ? 'Creando…' : 'Entrando…';
+            authSubmitBtn.textContent = authStep === 'verify' ? 'Verificando…' : (authMode === 'register' ? 'Enviando código…' : 'Entrando…');
             try {
-                const { res, data } = await apiFetch(`/api/${authMode}`, {
+                if (authStep === 'credentials' && !termsAccept.checked) throw new Error('Debes aceptar los términos y condiciones para continuar.');
+                const endpoint = authStep === 'verify' ? '/api/verify-email' : `/api/${authMode}`;
+                const payload = authStep === 'verify'
+                    ? { email: authEmail.value.trim(), code: authCode.value.trim() }
+                    : { username: authUsername.value.trim(), password: authPassword.value, terms_version: '2026-10-05', ...(authMode === 'register' ? { email: authEmail.value.trim() } : {}) };
+                const { res, data } = await apiFetch(endpoint, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: authUsername.value.trim(), password: authPassword.value })
+                    body: JSON.stringify(payload)
                 });
+                if (res.status === 202 && data.status === 'verification_required') {
+                    authStep = 'verify';
+                    authEmail.disabled = true;
+                    registerFields.hidden = true;
+                    verificationFields.hidden = false;
+                    authCode.disabled = false;
+                    authCode.required = true;
+                    authCode.focus();
+                    authSubtitle.textContent = `Hemos enviado un código a ${authEmail.value.trim()}.`;
+                    authError.textContent = data.message;
+                    return;
+                }
                 if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo iniciar la sesión.');
                 fillProfile(data.profile);
                 hideAuth();
@@ -1803,7 +2127,7 @@
                 authError.textContent = error.message || 'No se pudo conectar con el servidor.';
             } finally {
                 authSubmitBtn.disabled = false;
-                authSubmitBtn.textContent = authMode === 'register' ? 'Crear cuenta' : 'Entrar';
+                authSubmitBtn.textContent = authStep === 'verify' ? 'Verificar correo' : (authMode === 'register' ? 'Crear cuenta' : 'Entrar');
             }
         });
 
@@ -1952,12 +2276,35 @@
 
         async function procesarRespuesta(data) {
             if (data.status === 'ok') {
+                if (window.setNinoSpeechText) window.setNinoSpeechText(data.nino_text);
                 setNinoMessage(data.nino_text);
-                if (data.audio_url) {
-                    reproducirAudio(data.audio_url);
+                if (data.speech_job_id) {
+                    const requestId = ++latestSpeechRequest;
+                    consultarAudio(data.speech_job_id, activeWaifu, requestId);
                 }
             } else {
                 setNinoMessage(data.message || 'Error al comunicarse');
+            }
+        }
+
+        async function consultarAudio(jobId, waifu, requestId) {
+            const limite = Date.now() + 120000;
+            while (Date.now() < limite && requestId === latestSpeechRequest && waifu === activeWaifu) {
+                try {
+                    const res = await fetch(`/api/speech/${encodeURIComponent(jobId)}`);
+                    if (res.status === 401) return;
+                    const audioData = await res.json();
+                    if (audioData.status === 'ok') {
+                        if (audioData.audio_url && requestId === latestSpeechRequest && waifu === activeWaifu) {
+                            reproducirAudio(audioData.audio_url);
+                        }
+                        return;
+                    }
+                    if (audioData.status !== 'pending') return;
+                } catch (_) {
+                    return;
+                }
+                await new Promise(resolve => setTimeout(resolve, 800));
             }
         }
 
@@ -1976,7 +2323,7 @@
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: texto, waifu: activeWaifu })
+                    body: JSON.stringify({ text: texto, waifu: activeWaifu, mode: activeChatMode })
                 });
                 const data = await res.json();
                 if (window.setNinoListening) window.setNinoListening(false);
@@ -2062,6 +2409,16 @@
         }
 
         sendBtn.addEventListener('click', () => enviarTexto());
+        chatModeOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                activeChatMode = option.dataset.mode;
+                chatModeOptions.forEach(item => {
+                    const selected = item === option;
+                    item.classList.toggle('active', selected);
+                    item.setAttribute('aria-pressed', String(selected));
+                });
+            });
+        });
         chatInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') enviarTexto();
         });

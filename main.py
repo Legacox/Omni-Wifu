@@ -5,9 +5,12 @@ import hmac
 import os
 import re
 import secrets
+import smtplib
 import sqlite3
 import time
 import uuid
+from threading import Lock, Thread
+from email.message import EmailMessage
 from contextlib import contextmanager
 
 import edge_tts
@@ -59,7 +62,8 @@ DATABASE_URL = _raw_db_url
 USING_POSTGRES = bool(DATABASE_URL) and (psycopg is not None or psycopg2 is not None)
 
 SESSION_COOKIE = "nino_session"
-AVAILABLE_MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.8-flash-tts"]
+TERMS_VERSION = "2026-10-05"
+AVAILABLE_MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -122,6 +126,8 @@ WAIFU_CONFIG = {
 
 clients = {}
 chats = {}
+speech_jobs = {}
+speech_jobs_lock = Lock()
 
 
 # --- GESTIÓN DE BASE DE DATOS DINÁMICA ---
@@ -183,8 +189,12 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id {id_column},
                 username {username_column},
+                email TEXT NOT NULL DEFAULT '',
                 password_hash TEXT NOT NULL,
                 session_token TEXT UNIQUE,
+                email_verified INTEGER NOT NULL DEFAULT 0,
+                terms_accepted_at TEXT,
+                terms_version TEXT,
                 tts_provider TEXT NOT NULL DEFAULT 'gemini',
                 fish_key TEXT NOT NULL DEFAULT '',
                 active_gemini_slot INTEGER NOT NULL DEFAULT 1
@@ -201,9 +211,17 @@ def init_db():
             db_execute(conn, "ALTER TABLE users ADD COLUMN tts_provider TEXT NOT NULL DEFAULT 'gemini'")
         except Exception:
             pass
+        for column, definition in (("email", "TEXT NOT NULL DEFAULT ''"), ("email_verified", "INTEGER NOT NULL DEFAULT 0"),
+                                   ("terms_accepted_at", "TEXT"), ("terms_version", "TEXT")):
+            try:
+                db_execute(conn, f"ALTER TABLE users ADD COLUMN {column} {definition}")
+            except Exception:
+                pass
+        db_execute(conn, "CREATE TABLE IF NOT EXISTS email_verifications (email TEXT PRIMARY KEY, username TEXT NOT NULL, password_hash TEXT NOT NULL, code_hash TEXT NOT NULL, expires_at REAL NOT NULL, terms_version TEXT NOT NULL, attempts INTEGER NOT NULL DEFAULT 0)")
 
         db_execute(conn, "CREATE INDEX IF NOT EXISTS idx_users_session ON users(session_token)")
         db_execute(conn, "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_lower ON users (LOWER(username))")
+        db_execute(conn, "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_lower ON users (LOWER(email)) WHERE email <> ''")
 
 
 # Alias por compatibilidad e inicialización al cargar el servidor
@@ -257,7 +275,29 @@ def require_user():
     user = current_user()
     if not user:
         response.status = 401
+    elif user["terms_version"] != TERMS_VERSION:
+        response.status = 428
+        return None
     return user
+
+
+def send_verification_email(email, code):
+    host = os.environ.get("SMTP_HOST", "").strip()
+    sender = os.environ.get("SMTP_FROM", "").strip()
+    if not host or not sender:
+        raise RuntimeError("El envío de correo no está configurado en el servidor.")
+    msg = EmailMessage()
+    msg["Subject"] = "Tu código para crear una cuenta en Nino AI"
+    msg["From"] = sender
+    msg["To"] = email
+    msg.set_content(f"Tu código de verificación para Nino AI es: {code}\n\nCaduca en 10 minutos. Si no has solicitado esta cuenta, ignora este correo.")
+    port = int(os.environ.get("SMTP_PORT", "587"))
+    user, password = os.environ.get("SMTP_USER", ""), os.environ.get("SMTP_PASSWORD", "")
+    with smtplib.SMTP(host, port, timeout=20) as smtp:
+        smtp.starttls()
+        if user:
+            smtp.login(user, password)
+        smtp.send_message(msg)
 
 
 def json_response(payload, status=200):
@@ -527,7 +567,23 @@ def generar_audio_gemini(texto, gemini_key, waifu="nino"):
         raise
 
 
-def procesar_gemini(mensaje, user, waifu="nino"):
+def instrucciones_modo(modo, waifu):
+    """Adapta el estilo de este turno sin cambiar la personalidad base del personaje."""
+    personaje = "Nino, mantén tu carácter tsundere" if waifu == "nino" else "Miku, mantén tu energía alegre y musical"
+    if modo == "pregunta":
+        return (f"\n\nEn este turno estás en modo pregunta. {personaje}. "
+                "Responde primero a lo que se pregunta de forma directa, clara y útil; sé concisa y evita desviar la respuesta. "
+                "Conserva tu tono y actitud propios de manera natural.")
+    if modo == "automatico":
+        return (f"\n\nEn este turno estás en modo automático. {personaje}. "
+                "Decide por el contenido del mensaje si la persona busca una respuesta concreta o una charla abierta. "
+                "Si pregunta algo, responde primero de forma clara y directa, añadiendo solo el contexto útil. "
+                "Si inicia una conversación, conversa con naturalidad y deja espacio para continuar. "
+                "Conserva siempre tu tono y actitud propios.")
+    return ""
+
+
+def procesar_gemini(mensaje, user, waifu="nino", modo="conversacion", generar_voz=True):
     """
     Procesa la conversación con Gemini a través de la lista de modelos soportados
     e integra la síntesis de voz según la preferencia 'tts_provider' del usuario:
@@ -549,7 +605,9 @@ def procesar_gemini(mensaje, user, waifu="nino"):
         chat_key = (user["id"], waifu, gemini_key, model)
         try:
             chat = obtener_chat(user, waifu, gemini_key, model)
-            respuesta = chat.send_message(mensaje).text
+            indicacion_modo = instrucciones_modo(modo, waifu)
+            mensaje_turno = f"{indicacion_modo}\n\nMensaje de la persona: {mensaje}" if indicacion_modo else mensaje
+            respuesta = chat.send_message(mensaje_turno).text
             break
         except Exception as error:
             last_error = error
@@ -557,9 +615,16 @@ def procesar_gemini(mensaje, user, waifu="nino"):
             if "closed" in str(error).lower():
                 clients.pop(gemini_key, None)
             print(f"[Aviso Gemini] Modelo {model} falló: {error}")
+            error_detail = str(error).lower()
+            if any(marker in error_detail for marker in ("429", "resource_exhausted", "quota", "403", "401", "api_key_invalid", "permission_denied")):
+                break
 
     if not respuesta:
         respuesta = mensaje_error_gemini(last_error)
+
+    # El texto llega al navegador sin esperar a proveedores de voz que pueden tardar varios segundos.
+    if not generar_voz:
+        return respuesta, None
 
     config = WAIFU_CONFIG[waifu]
     audio_url = None
@@ -640,6 +705,77 @@ def procesar_gemini(mensaje, user, waifu="nino"):
     return respuesta, audio_url
 
 
+def iniciar_generacion_audio(texto, user, waifu):
+    job_id = uuid.uuid4().hex
+    with speech_jobs_lock:
+        now = time.time()
+        for stale_id, stale_job in list(speech_jobs.items()):
+            if now - stale_job["created_at"] > 600:
+                speech_jobs.pop(stale_id, None)
+        speech_jobs[job_id] = {"user_id": user["id"], "status": "pending", "audio_url": None, "created_at": now}
+
+    def generar():
+        try:
+            audio_url = generar_audio_respuesta(texto, user, waifu)
+        except Exception as error:
+            print(f"[Error TTS] No se pudo generar el audio: {error}")
+            audio_url = None
+        with speech_jobs_lock:
+            job = speech_jobs.get(job_id)
+            if job:
+                job["status"] = "done"
+                job["audio_url"] = audio_url
+
+    Thread(target=generar, name=f"speech-{job_id[:8]}", daemon=True).start()
+    return job_id
+
+
+def generar_audio_respuesta(texto, user, waifu="nino"):
+    """Genera voz bajo demanda, después de que el texto ya se haya mostrado."""
+    if waifu not in WAIFU_CONFIG:
+        waifu = "nino"
+    active_slot = user["active_gemini_slot"]
+    gemini_key = (user[f"gemini_key_{active_slot}"] or "").strip()
+    if not gemini_key:
+        return None
+    config = WAIFU_CONFIG[waifu]
+    texto_audio = limpiar_texto(texto) or "..."
+    texto_gemini = limpiar_texto_gemini(texto) or texto_audio
+    voice = config.get("voice", "es-ES-ElviraNeural")
+    rate = config.get("rate", "+0%")
+    pitch = config.get("pitch", "+0Hz")
+    try:
+        user_tts_pref = str(user["tts_provider"] or "gemini").strip().lower()
+    except Exception:
+        user_tts_pref = "gemini"
+
+    if user_tts_pref == "edge":
+        try:
+            return generar_audio_edge(texto_audio, voice=voice, rate=rate, pitch=pitch)
+        except Exception as error:
+            print(f"[Error TTS] Edge TTS falló: {error}")
+            return None
+    if user_tts_pref == "fish":
+        try:
+            fish_key = str(user["fish_key"] or "").strip()
+        except Exception:
+            fish_key = ""
+        if fish_key:
+            try:
+                return generar_audio_fish(texto_audio, config.get("reference_id", "c961aaa2a71f469e98b8b2151b8c219d"), fish_key)
+            except Exception as error:
+                print(f"[Aviso TTS] Fish Audio falló: {error}")
+    try:
+        return generar_audio_gemini(texto_gemini, gemini_key, waifu=waifu)
+    except Exception as error:
+        print(f"[Aviso TTS] Gemini TTS falló: {error}")
+    try:
+        return generar_audio_edge(texto_audio, voice=voice, rate=rate, pitch=pitch)
+    except Exception as error:
+        print(f"[Error TTS] Edge TTS falló: {error}")
+        return None
+
+
 # --- ENDPOINTS DE LA API ---
 
 @server_app.route("/api/register", method=["POST", "OPTIONS"])
@@ -648,20 +784,60 @@ def api_register():
         return json_response({})
     data = request_data()
     username, password = str(data.get("username", "")).strip(), str(data.get("password", ""))
+    email = str(data.get("email", "")).strip().lower()
+    if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        return json_response({"status": "error", "message": "Introduce un correo electrónico válido."}, 400)
+    if data.get("terms_version") != TERMS_VERSION:
+        return json_response({"status": "error", "message": "Debes aceptar los términos y condiciones vigentes."}, 400)
     if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", username):
         return json_response({"status": "error", "message": "El usuario debe tener entre 3 y 32 caracteres."}, 400)
     if len(password) < 8:
         return json_response({"status": "error", "message": "La contraseña debe tener al menos 8 caracteres."}, 400)
-    token = new_session_token()
     try:
         with db_connection() as conn:
-            db_execute(conn, "INSERT INTO users (username, password_hash, session_token, tts_provider) VALUES (?, ?, ?, 'gemini')",
-                       (username, hash_password(password), token))
+            if db_execute(conn, "SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (username,)).fetchone():
+                return json_response({"status": "error", "message": "Ese nombre de usuario ya está en uso."}, 409)
+            if db_execute(conn, "SELECT id FROM users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone():
+                return json_response({"status": "error", "message": "Ese correo ya está asociado a una cuenta."}, 409)
+            code = f"{secrets.randbelow(1000000):06d}"
+            db_execute(conn, "INSERT INTO email_verifications (email, username, password_hash, code_hash, expires_at, terms_version) VALUES (?, ?, ?, ?, ?, ?)",
+                       (email, username, hash_password(password), hashlib.sha256(code.encode()).hexdigest(), time.time() + 600, TERMS_VERSION))
     except INTEGRITY_ERRORS:
-        return json_response({"status": "error", "message": "Ese nombre de usuario ya está en uso."}, 409)
-    set_session_cookie(token)
+        return json_response({"status": "error", "message": "Ya hay una verificación pendiente para ese correo."}, 409)
+    try:
+        send_verification_email(email, code)
+    except Exception:
+        with db_connection() as conn:
+            db_execute(conn, "DELETE FROM email_verifications WHERE email = ?", (email,))
+        return json_response({"status": "error", "message": "No se pudo enviar el correo. Revisa la configuración de correo del servidor e inténtalo de nuevo."}, 503)
+    return json_response({"status": "verification_required", "message": "Te hemos enviado un código. Introdúcelo para terminar de crear la cuenta."}, 202)
+
+
+@server_app.route("/api/verify-email", method=["POST", "OPTIONS"])
+def api_verify_email():
+    if request.method == "OPTIONS":
+        return json_response({})
+    data = request_data()
+    email, code = str(data.get("email", "")).strip().lower(), str(data.get("code", "")).strip()
     with db_connection() as conn:
+        pending = db_execute(conn, "SELECT * FROM email_verifications WHERE email = ?", (email,)).fetchone()
+        if not pending or pending["expires_at"] < time.time():
+            return json_response({"status": "error", "message": "El código no es válido o ha caducado. Vuelve a crear la cuenta."}, 400)
+        if pending["attempts"] >= 5:
+            db_execute(conn, "DELETE FROM email_verifications WHERE email = ?", (email,))
+            return json_response({"status": "error", "message": "Se agotaron los intentos. Vuelve a crear la cuenta."}, 400)
+        if not hmac.compare_digest(pending["code_hash"], hashlib.sha256(code.encode()).hexdigest()):
+            db_execute(conn, "UPDATE email_verifications SET attempts = attempts + 1 WHERE email = ?", (email,))
+            return json_response({"status": "error", "message": "El código no es válido. Revisa el correo e inténtalo de nuevo."}, 400)
+        token = new_session_token()
+        try:
+            db_execute(conn, "INSERT INTO users (username, email, password_hash, session_token, email_verified, terms_accepted_at, terms_version, tts_provider) VALUES (?, ?, ?, ?, 1, ?, ?, 'gemini')",
+                       (pending["username"], email, pending["password_hash"], token, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), pending["terms_version"]))
+        except INTEGRITY_ERRORS:
+            return json_response({"status": "error", "message": "El nombre o correo ya está asociado a una cuenta."}, 409)
+        db_execute(conn, "DELETE FROM email_verifications WHERE email = ?", (email,))
         user = db_execute(conn, "SELECT * FROM users WHERE session_token = ?", (token,)).fetchone()
+    set_session_cookie(token)
     return json_response({"status": "ok", "profile": public_profile(user)}, 201)
 
 
@@ -671,12 +847,15 @@ def api_login():
         return json_response({})
     data = request_data()
     username, password = str(data.get("username", "")).strip(), str(data.get("password", ""))
+    if data.get("terms_version") != TERMS_VERSION:
+        return json_response({"status": "error", "message": "Debes aceptar los términos y condiciones vigentes."}, 400)
     with db_connection() as conn:
         user = db_execute(conn, "SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,)).fetchone()
         if not user or not verify_password(password, user["password_hash"]):
             return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
         token = new_session_token()
-        db_execute(conn, "UPDATE users SET session_token = ? WHERE id = ?", (token, user["id"]))
+        db_execute(conn, "UPDATE users SET session_token = ?, terms_accepted_at = ?, terms_version = ? WHERE id = ?",
+                   (token, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), TERMS_VERSION, user["id"]))
         user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
     set_session_cookie(token)
     return json_response({"status": "ok", "profile": public_profile(user)})
@@ -742,8 +921,28 @@ def api_chat():
     waifu = str(data.get("waifu", "nino")).strip()
     if not mensaje:
         return json_response({"status": "error", "message": "Mensaje vacío"}, 400)
-    respuesta, audio_url = procesar_gemini(mensaje, user, waifu)
-    return json_response({"status": "ok", "user_text": mensaje, "nino_text": respuesta, "audio_url": audio_url})
+    modo = str(data.get("mode", "conversacion")).strip().lower()
+    if modo not in ("conversacion", "pregunta", "automatico"):
+        modo = "conversacion"
+    respuesta, _ = procesar_gemini(mensaje, user, waifu, modo=modo, generar_voz=False)
+    speech_job_id = iniciar_generacion_audio(respuesta, user, waifu)
+    return json_response({"status": "ok", "user_text": mensaje, "nino_text": respuesta, "speech_job_id": speech_job_id})
+
+
+@server_app.route("/api/speech/<job_id>", method="GET")
+def api_speech(job_id):
+    user = require_user()
+    if not user:
+        return json_response({"status": "error", "message": "Tu sesión ha caducado. Inicia sesión de nuevo."}, 401)
+    with speech_jobs_lock:
+        job = speech_jobs.get(job_id)
+        if not job or job["user_id"] != user["id"]:
+            return json_response({"status": "error", "message": "Audio no disponible."}, 404)
+        if job["status"] == "pending":
+            return json_response({"status": "pending"})
+        audio_url = job["audio_url"]
+        speech_jobs.pop(job_id, None)
+    return json_response({"status": "ok", "audio_url": audio_url})
 
 
 @server_app.route("/api/record", method=["POST", "OPTIONS"])
