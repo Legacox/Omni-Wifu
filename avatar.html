@@ -678,6 +678,12 @@
         }
         .profile-select-native { position:absolute !important; width:1px !important; height:1px !important; padding:0 !important; margin:-1px !important; overflow:hidden !important; clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important; }
         .profile-input:focus { border-color: #FF3366; box-shadow: 0 0 0 3px rgba(255,51,102,.12); }
+        .password-field { position: relative; width: 100%; }
+        .password-field > .profile-input { padding-right: 44px; }
+        .password-toggle { position: absolute; top: 50%; right: 8px; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 9px; color: rgba(60,60,67,.62); background: transparent; cursor: pointer; transform: translateY(-50%); transition: color .18s, background .18s; }
+        .password-toggle:hover { color: #d92051; background: rgba(255,51,102,.09); }
+        .password-toggle:focus-visible { outline: 2px solid #FF3366; outline-offset: 1px; }
+        .password-toggle svg { width: 17px; height: 17px; }
         .profile-choice { position:relative; width:100%; }
         .profile-choice-trigger { width:100%; min-height:42px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 13px; border:1px solid rgba(28,28,30,.1); border-radius:13px; color:#1C1C1E; background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(255,248,250,.9)); box-shadow:0 4px 13px rgba(28,28,30,.045),inset 0 1px 0 rgba(255,255,255,.95); text-align:left; cursor:pointer; font:700 12px 'Plus Jakarta Sans',sans-serif; transition:border-color .2s,box-shadow .2s,transform .2s; }
         .profile-choice-trigger:hover,.profile-choice.open .profile-choice-trigger { border-color:rgba(255,51,102,.48); box-shadow:0 5px 16px rgba(255,51,102,.1),inset 0 1px 0 #fff; }
@@ -726,6 +732,7 @@
         .auth-submit { width: 100%; margin-top: 17px; padding: 12px; border: none; border-radius: 14px; color: #fff; background: #1C1C1E; cursor: pointer; font: 800 13px 'Plus Jakarta Sans', sans-serif; transition: .2s; }
         .auth-submit:hover { background: #FF3366; transform: translateY(-2px); box-shadow: 0 8px 17px rgba(255,51,102,.22); }
         .auth-error { min-height: 17px; margin: 10px 2px 0; color: #d92051; font-size: 11px; font-weight: 700; }
+        .verify-spam-note { margin: 8px 0 0; color: rgba(60,60,67,.67); font-size: 11px; line-height: 1.45; }
         .auth-card { max-height: calc(100vh - 32px); overflow-y: auto; }
         .auth-extra[hidden] { display: none !important; }
         .auth-check { display:flex; align-items:flex-start; gap:9px; margin-top:14px; color:rgba(28,28,30,.76); font-size:11px; font-weight:600; line-height:1.5; }
@@ -801,13 +808,13 @@
             <h1 class="auth-title">Nino AI</h1>
             <p class="auth-subtitle" id="auth-subtitle">Inicia sesión para conversar y guardar tus claves privadas.</p>
             <div class="auth-tabs"><button class="auth-tab active" type="button" data-auth-mode="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-mode="register">Crear cuenta</button></div>
-            <label class="profile-label" for="auth-username">Nombre de usuario</label>
+            <label class="profile-label" id="auth-username-label" for="auth-username">Nombre de usuario</label>
             <input class="profile-input" id="auth-username" autocomplete="username" required minlength="3" maxlength="32" placeholder="Tu nombre">
             <div class="auth-extra" id="register-fields" hidden>
                 <label class="profile-label" for="auth-email">Correo electrónico</label>
                 <input class="profile-input" id="auth-email" type="email" autocomplete="email" maxlength="254" placeholder="tu@correo.com" disabled>
             </div>
-            <label class="profile-label" for="auth-password">Contraseña</label>
+            <label class="profile-label" id="auth-password-label" for="auth-password">Contraseña</label>
             <input class="profile-input" id="auth-password" type="password" autocomplete="current-password" required minlength="8" placeholder="Mínimo 8 caracteres">
             <div class="auth-extra" id="terms-accept-row">
                 <label class="auth-check"><input id="terms-accept" type="checkbox" required><span>He leído y acepto los <a class="auth-link" id="terms-open">términos y condiciones</a> y la información sobre mis datos.</span></label>
@@ -816,9 +823,10 @@
                 <div id="supabase-link-notice" style="text-align:center;padding:12px 4px 4px;line-height:1.55;">
                     <span style="font-size:1.6rem;">📧</span><br>
                     <strong>Revisa tu correo</strong><br>
-                    <span id="verify-email-hint" style="font-size:0.88rem;opacity:0.8;">Hemos enviado un enlace de confirmación. Ábrelo para activar tu cuenta y volver aquí.</span>
+                    <span id="verify-email-hint" style="font-size:0.88rem;opacity:0.8;">Hemos enviado un código de 8 dígitos. Introdúcelo aquí para activar tu cuenta.</span>
+                    <p class="verify-spam-note">Si no aparece en tu bandeja de entrada, revisa también la carpeta de spam o correo no deseado.</p>
                 </div>
-                <input class="profile-input" id="auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="Código de 6 dígitos" disabled style="display:none">
+                <input class="profile-input" id="auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{8}" maxlength="8" placeholder="Código de 8 dígitos" disabled style="display:none">
             </div>
             <button class="auth-submit" id="auth-submit-btn" type="submit">Entrar</button>
             <div class="auth-error" id="auth-error" role="alert"></div>
@@ -1853,6 +1861,31 @@
         const profileNotice = document.getElementById('profile-notice');
         const chatModeOptions = document.querySelectorAll('.chat-mode-option');
 
+        // Control accesible para mostrar u ocultar contraseñas y claves privadas.
+        document.querySelectorAll('input[type="password"]').forEach(input => {
+            const field = document.createElement('div');
+            field.className = 'password-field';
+            input.parentNode.insertBefore(field, input);
+            field.appendChild(input);
+
+            const toggle = document.createElement('button');
+            toggle.className = 'password-toggle';
+            toggle.type = 'button';
+            const eyeIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>';
+            const eyeOffIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"/><path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c6.4 0 10 7 10 7a14.8 14.8 0 0 1-3.1 3.9M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7c1.1 0 2.1-.2 3-.5"/></svg>';
+            toggle.innerHTML = eyeIcon;
+            toggle.setAttribute('aria-label', 'Mostrar contraseña');
+            toggle.title = 'Mostrar contraseña';
+            toggle.addEventListener('click', () => {
+                const showing = input.type === 'password';
+                input.type = showing ? 'text' : 'password';
+                toggle.innerHTML = showing ? eyeOffIcon : eyeIcon;
+                toggle.setAttribute('aria-label', showing ? 'Ocultar contraseña' : 'Mostrar contraseña');
+                toggle.title = showing ? 'Ocultar contraseña' : 'Mostrar contraseña';
+            });
+            field.appendChild(toggle);
+        });
+
         let activeWaifu = 'nino';
         let isRecording = false;
         let currentAudio = null;
@@ -2079,9 +2112,14 @@
             verificationFields.hidden = true;
             authCode.disabled = true;
             authCode.required = false;
+            authCode.style.display = 'none';
+            authCode.value = '';
             // Restaurar campos que podrían haberse ocultado durante el flujo Supabase
-            document.getElementById('auth-username').parentElement.hidden = false;
-            document.getElementById('auth-password').parentElement.hidden = false;
+            document.getElementById('auth-username-label').hidden = false;
+            authUsername.hidden = false;
+            document.getElementById('auth-password-label').hidden = false;
+            authPassword.hidden = false;
+            authPassword.parentElement.hidden = false;
             document.getElementById('terms-accept-row').hidden = false;
             registerFields.hidden = authMode !== 'register';
             authEmail.disabled = authMode !== 'register';
@@ -2129,9 +2167,12 @@
                 if (res.status === 202 && data.status === 'verification_required' && data.supabase_flow) {
                     authStep = 'supabase_pending';
                     // Ocultar campos de formulario, mostrar aviso de "revisa tu correo"
-                    document.getElementById('auth-username').closest('label') && (document.getElementById('auth-username').parentElement.hidden = true);
+                    document.getElementById('auth-username-label').hidden = true;
+                    authUsername.hidden = true;
                     registerFields.hidden = true;
-                    document.getElementById('auth-password').parentElement.hidden = true;
+                    document.getElementById('auth-password-label').hidden = true;
+                    authPassword.hidden = true;
+                    authPassword.parentElement.hidden = true;
                     document.getElementById('terms-accept-row').hidden = true;
                     verificationFields.hidden = false;
                     const hint = document.getElementById('verify-email-hint');
@@ -2143,7 +2184,7 @@
                     return;
                 }
 
-                // Flujo clásico con código de 6 dígitos (por si acaso)
+                // Confirmación de cuenta mediante código OTP de Supabase.
                 if (res.status === 202 && data.status === 'verification_required') {
                     authStep = 'verify';
                     authEmail.disabled = true;
@@ -2152,9 +2193,17 @@
                     authCode.style.display = '';
                     authCode.disabled = false;
                     authCode.required = true;
+                    document.getElementById('auth-username-label').hidden = true;
+                    authUsername.hidden = true;
+                    document.getElementById('auth-password-label').hidden = true;
+                    authPassword.hidden = true;
+                    authPassword.parentElement.hidden = true;
+                    document.getElementById('terms-accept-row').hidden = true;
                     authCode.focus();
                     authSubtitle.textContent = `Hemos enviado un código a ${authEmail.value.trim()}.`;
-                    authError.textContent = data.message;
+                    const hint = document.getElementById('verify-email-hint');
+                    if (hint) hint.textContent = data.message || 'Introdúcelo aquí para activar tu cuenta.';
+                    authError.textContent = '';
                     return;
                 }
 
