@@ -954,8 +954,36 @@ def api_login():
         return json_response({"status": "error", "message": "Debes aceptar los términos y condiciones vigentes."}, 400)
     with db_connection() as conn:
         user = db_execute(conn, "SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,)).fetchone()
-        if not user or not verify_password(password, user["password_hash"]):
+    if not user:
+        return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
+
+    # Las cuentas confirmadas anteriormente mediante enlace podían haberse
+    # creado localmente con una contraseña aleatoria. Si la contraseña local
+    # no coincide, validarla con Supabase y sincronizar el hash solo si Supabase
+    # confirma que es correcta.
+    supabase_access_token = None
+    if not verify_password(password, user["password_hash"]):
+        if supabase_client is None:
             return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
+        try:
+            sb_response = supabase_client.auth.sign_in_with_password({
+                "email": user["email"],
+                "password": password,
+            })
+            sb_session = getattr(sb_response, "session", None)
+            if not sb_session:
+                return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
+            supabase_access_token = sb_session.access_token
+            with db_connection() as conn:
+                db_execute(conn, "UPDATE users SET password_hash = ?, email_verified = 1 WHERE id = ?",
+                           (hash_password(password), user["id"]))
+                user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+            print(f"[Supabase] Contraseña local sincronizada para: {user['email']}")
+        except Exception as sb_err:
+            print(f"[Supabase] No se pudo validar el acceso para {user['email']}: {sb_err}")
+            return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
+
+    with db_connection() as conn:
         token = new_session_token()
         db_execute(conn, "UPDATE users SET session_token = ?, terms_accepted_at = ?, terms_version = ? WHERE id = ?",
                    (token, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), TERMS_VERSION, user["id"]))
@@ -963,8 +991,7 @@ def api_login():
     set_session_cookie(token)
 
     # Inicio de sesión paralelo en Supabase Auth (si está configurado)
-    supabase_access_token = None
-    if supabase_client is not None:
+    if supabase_client is not None and not supabase_access_token:
         try:
             sb_response = supabase_client.auth.sign_in_with_password({
                 "email": user["email"],
