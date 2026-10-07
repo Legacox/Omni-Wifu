@@ -952,10 +952,66 @@ def api_login():
     username, password = str(data.get("username", "")).strip(), str(data.get("password", ""))
     if data.get("terms_version") != TERMS_VERSION:
         return json_response({"status": "error", "message": "Debes aceptar los términos y condiciones vigentes."}, 400)
+    # La base de datos local de Render puede no contener cuentas antiguas (por
+    # ejemplo, tras perderse el almacenamiento local). Permitir iniciar sesión
+    # con el correo de Supabase y reconstruir el perfil local tras autenticarlo.
     with db_connection() as conn:
-        user = db_execute(conn, "SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,)).fetchone()
+        user = db_execute(conn,
+            "SELECT * FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) LIMIT 1",
+            (username, username)).fetchone()
+
     if not user:
-        return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
+        if supabase_client is None or "@" not in username:
+            return json_response({"status": "error", "message": "No encontramos esa cuenta. Prueba con el correo con el que te registraste."}, 401)
+        try:
+            sb_response = supabase_client.auth.sign_in_with_password({
+                "email": username.lower(),
+                "password": password,
+            })
+            sb_session = getattr(sb_response, "session", None)
+            sb_user = getattr(sb_response, "user", None)
+            if not sb_session or not sb_user:
+                return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
+
+            email = (getattr(sb_user, "email", "") or username).strip().lower()
+            metadata = getattr(sb_user, "user_metadata", {}) or {}
+            suggested_username = str(metadata.get("username", "")).strip()
+            if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", suggested_username):
+                suggested_username = re.sub(r"[^A-Za-z0-9_.-]", "_", email.split("@", 1)[0])[:32]
+            if len(suggested_username) < 3:
+                suggested_username = "usuario"
+
+            token = new_session_token()
+            now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            with db_connection() as conn:
+                # Si otra solicitud ya creó el perfil, reutilizarlo.
+                user = db_execute(conn, "SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
+                if not user:
+                    candidate = suggested_username[:32]
+                    suffix = 1
+                    while db_execute(conn, "SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (candidate,)).fetchone():
+                        candidate = f"{suggested_username[:27]}_{suffix}"
+                        suffix += 1
+                    try:
+                        db_execute(conn,
+                            "INSERT INTO users (username, email, password_hash, session_token, email_verified, terms_accepted_at, terms_version, tts_provider) VALUES (?, ?, ?, ?, 1, ?, ?, 'gemini')",
+                            (candidate, email, hash_password(password), token, now_str, TERMS_VERSION))
+                    except INTEGRITY_ERRORS:
+                        user = db_execute(conn, "SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
+                    if not user:
+                        user = db_execute(conn, "SELECT * FROM users WHERE session_token = ?", (token,)).fetchone()
+                else:
+                    db_execute(conn, "UPDATE users SET session_token = ?, terms_accepted_at = ?, terms_version = ? WHERE id = ?",
+                               (token, now_str, TERMS_VERSION, user["id"]))
+                    user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+            if not user:
+                return json_response({"status": "error", "message": "No se pudo preparar tu perfil. Inténtalo de nuevo."}, 500)
+            set_session_cookie(user["session_token"])
+            print(f"[Supabase] Perfil local recuperado al iniciar sesión: {email}")
+            return json_response({"status": "ok", "profile": public_profile(user), "supabase_access_token": sb_session.access_token})
+        except Exception as sb_err:
+            print(f"[Supabase] No se pudo iniciar sesión para {username}: {sb_err}")
+            return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
 
     # Las cuentas confirmadas anteriormente mediante enlace podían haberse
     # creado localmente con una contraseña aleatoria. Si la contraseña local

@@ -816,8 +816,8 @@
             <h1 class="auth-title">Nino AI</h1>
             <p class="auth-subtitle" id="auth-subtitle">Inicia sesión para conversar y guardar tus claves privadas.</p>
             <div class="auth-tabs" id="auth-tabs"><button class="auth-tab active" type="button" data-auth-mode="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-mode="register">Crear cuenta</button></div>
-            <label class="profile-label" id="auth-username-label" for="auth-username">Nombre de usuario</label>
-            <input class="profile-input" id="auth-username" autocomplete="username" required minlength="3" maxlength="32" placeholder="Tu nombre">
+            <label class="profile-label" id="auth-username-label" for="auth-username">Usuario o correo electrónico</label>
+            <input class="profile-input" id="auth-username" autocomplete="username" required minlength="3" maxlength="254" placeholder="Tu usuario o correo">
             <div class="auth-extra" id="register-fields" hidden>
                 <label class="profile-label" for="auth-email">Correo electrónico</label>
                 <input class="profile-input" id="auth-email" type="email" autocomplete="email" maxlength="254" placeholder="tu@correo.com" disabled>
@@ -2192,6 +2192,8 @@
                 : 'Inicia sesión para conversar y guardar tus claves privadas.';
             authSubmitBtn.textContent = creating ? 'Crear cuenta' : 'Entrar';
             authPassword.autocomplete = creating ? 'new-password' : 'current-password';
+            document.getElementById('auth-username-label').textContent = creating ? 'Nombre de usuario' : 'Usuario o correo electrónico';
+            authUsername.placeholder = creating ? 'Elige un nombre de usuario' : 'Tu usuario o correo';
             authError.textContent = '';
         }));
 
