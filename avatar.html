@@ -727,12 +727,19 @@
         .auth-title { margin: 0; color: #1C1C1E; font-size: 25px; font-weight: 800; letter-spacing: -.8px; }
         .auth-subtitle { margin: 6px 0 20px; color: rgba(60,60,67,.65); font-size: 12px; font-weight: 600; line-height: 1.5; }
         .auth-tabs { display: flex; padding: 4px; gap: 4px; border-radius: 13px; background: rgba(28,28,30,.07); margin-bottom: 16px; }
+        .auth-tabs[hidden], .otp-inputs[hidden], .otp-change-email[hidden] { display: none !important; }
         .auth-tab { flex: 1; padding: 9px; border: none; border-radius: 10px; background: transparent; color: rgba(28,28,30,.58); cursor: pointer; font: 800 12px 'Plus Jakarta Sans', sans-serif; transition: .2s; }
         .auth-tab.active { color: #1C1C1E; background: #fff; box-shadow: 0 3px 8px rgba(0,0,0,.08); }
         .auth-submit { width: 100%; margin-top: 17px; padding: 12px; border: none; border-radius: 14px; color: #fff; background: #1C1C1E; cursor: pointer; font: 800 13px 'Plus Jakarta Sans', sans-serif; transition: .2s; }
         .auth-submit:hover { background: #FF3366; transform: translateY(-2px); box-shadow: 0 8px 17px rgba(255,51,102,.22); }
         .auth-error { min-height: 17px; margin: 10px 2px 0; color: #d92051; font-size: 11px; font-weight: 700; }
         .verify-spam-note { margin: 8px 0 0; color: rgba(60,60,67,.67); font-size: 11px; line-height: 1.45; }
+        .otp-inputs { display: flex; justify-content: center; gap: 9px; margin: 18px 0 8px; }
+        .otp-digit { width: 44px; height: 50px; border: 1px solid rgba(28,28,30,.12); border-radius: 12px; outline: 0; color: #1C1C1E; background: linear-gradient(145deg,rgba(255,255,255,.98),rgba(255,247,249,.88)); box-shadow: 0 4px 12px rgba(28,28,30,.045),inset 0 1px 0 #fff; text-align: center; font: 800 22px 'Plus Jakarta Sans',sans-serif; transition: border-color .18s,box-shadow .18s,transform .18s; }
+        .otp-digit:focus { border-color: #FF3366; box-shadow: 0 0 0 3px rgba(255,51,102,.13),0 5px 14px rgba(255,51,102,.08); transform: translateY(-1px); }
+        .otp-digit:disabled { opacity: .55; }
+        .otp-change-email { display: block; margin: 8px auto 0; padding: 5px 8px; border: 0; color: #c92350; background: transparent; cursor: pointer; font: 700 11px 'Plus Jakarta Sans',sans-serif; }
+        .otp-change-email:hover { text-decoration: underline; }
         .auth-card { max-height: calc(100vh - 32px); overflow-y: auto; }
         .auth-extra[hidden] { display: none !important; }
         .auth-check { display:flex; align-items:flex-start; gap:9px; margin-top:14px; color:rgba(28,28,30,.76); font-size:11px; font-weight:600; line-height:1.5; }
@@ -746,6 +753,7 @@
         .terms-close { position:sticky; top:0; z-index:4; display:flex; align-items:center; justify-content:center; float:right; width:36px; height:36px; margin:-10px -10px -26px auto; border:1px solid rgba(28,28,30,.08); border-radius:50%; color:#1C1C1E; background:rgba(255,255,255,.94); box-shadow:0 4px 14px rgba(28,28,30,.12); font-size:24px; cursor:pointer; backdrop-filter:blur(10px); }
         .terms-close:hover { color:#fff; background:#FF3366; }
         @media (max-width: 768px) { .profile-toggle-btn { top: 18px; right: 18px; } .profile-panel { top: 18px; right: 18px; max-height: calc(100vh - 36px); } }
+        @media (max-width: 380px) { .otp-inputs { gap: 6px; } .otp-digit { width: 40px; height: 46px; } }
     </style>
     <script type="importmap">
         {
@@ -807,7 +815,7 @@
             <div class="auth-logo">✦</div>
             <h1 class="auth-title">Nino AI</h1>
             <p class="auth-subtitle" id="auth-subtitle">Inicia sesión para conversar y guardar tus claves privadas.</p>
-            <div class="auth-tabs"><button class="auth-tab active" type="button" data-auth-mode="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-mode="register">Crear cuenta</button></div>
+            <div class="auth-tabs" id="auth-tabs"><button class="auth-tab active" type="button" data-auth-mode="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-mode="register">Crear cuenta</button></div>
             <label class="profile-label" id="auth-username-label" for="auth-username">Nombre de usuario</label>
             <input class="profile-input" id="auth-username" autocomplete="username" required minlength="3" maxlength="32" placeholder="Tu nombre">
             <div class="auth-extra" id="register-fields" hidden>
@@ -823,10 +831,19 @@
                 <div id="supabase-link-notice" style="text-align:center;padding:12px 4px 4px;line-height:1.55;">
                     <span style="font-size:1.6rem;">📧</span><br>
                     <strong>Revisa tu correo</strong><br>
-                    <span id="verify-email-hint" style="font-size:0.88rem;opacity:0.8;">Hemos enviado un código de 8 dígitos. Introdúcelo aquí para activar tu cuenta.</span>
+                    <span id="verify-email-hint" style="font-size:0.88rem;opacity:0.8;">Hemos enviado un código de 6 dígitos. Introdúcelo aquí para activar tu cuenta.</span>
                     <p class="verify-spam-note">Si no aparece en tu bandeja de entrada, revisa también la carpeta de spam o correo no deseado.</p>
                 </div>
-                <input class="profile-input" id="auth-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{8}" maxlength="8" placeholder="Código de 8 dígitos" disabled style="display:none">
+                <div class="otp-inputs" id="auth-code-inputs" role="group" aria-label="Código de verificación de seis dígitos" hidden>
+                    <input class="otp-digit" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="Dígito 1" disabled>
+                    <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 2" disabled>
+                    <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 3" disabled>
+                    <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 4" disabled>
+                    <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 5" disabled>
+                    <input class="otp-digit" type="text" inputmode="numeric" maxlength="1" aria-label="Dígito 6" disabled>
+                </div>
+                <input id="auth-code" type="hidden" value="" disabled>
+                <button class="otp-change-email" id="otp-change-email" type="button" hidden>Usar otro correo</button>
             </div>
             <button class="auth-submit" id="auth-submit-btn" type="submit">Entrar</button>
             <div class="auth-error" id="auth-error" role="alert"></div>
@@ -1840,6 +1857,10 @@
         const authPassword = document.getElementById('auth-password');
         const authEmail = document.getElementById('auth-email');
         const authCode = document.getElementById('auth-code');
+        const authCodeInputs = document.getElementById('auth-code-inputs');
+        const otpDigits = Array.from(authCodeInputs.querySelectorAll('.otp-digit'));
+        const otpChangeEmail = document.getElementById('otp-change-email');
+        const authTabsContainer = document.getElementById('auth-tabs');
         const registerFields = document.getElementById('register-fields');
         const verificationFields = document.getElementById('verification-fields');
         const termsAccept = document.getElementById('terms-accept');
@@ -1884,6 +1905,41 @@
                 toggle.title = showing ? 'Ocultar contraseña' : 'Mostrar contraseña';
             });
             field.appendChild(toggle);
+        });
+
+        function syncOtpCode() {
+            authCode.value = otpDigits.map(input => input.value).join('');
+        }
+        otpDigits.forEach((input, index) => {
+            input.addEventListener('input', () => {
+                const entered = input.value.replace(/\D/g, '');
+                if (entered.length > 1) {
+                    const digits = entered.slice(0, otpDigits.length - index).split('');
+                    digits.forEach((digit, offset) => { otpDigits[index + offset].value = digit; });
+                    otpDigits[Math.min(index + digits.length, otpDigits.length - 1)].focus();
+                } else {
+                    input.value = entered.slice(-1);
+                    if (input.value && index < otpDigits.length - 1) otpDigits[index + 1].focus();
+                }
+                syncOtpCode();
+            });
+            input.addEventListener('keydown', event => {
+                if (event.key === 'Backspace' && !input.value && index > 0) {
+                    otpDigits[index - 1].value = '';
+                    otpDigits[index - 1].focus();
+                    syncOtpCode();
+                } else if (event.key === 'ArrowLeft' && index > 0) otpDigits[index - 1].focus();
+                else if (event.key === 'ArrowRight' && index < otpDigits.length - 1) otpDigits[index + 1].focus();
+            });
+            input.addEventListener('paste', event => {
+                const pasted = (event.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '').slice(0, otpDigits.length - index);
+                if (!pasted) return;
+                event.preventDefault();
+                otpDigits.slice(index).forEach(input => { input.value = ''; });
+                pasted.split('').forEach((digit, offset) => { otpDigits[index + offset].value = digit; });
+                otpDigits[Math.min(index + pasted.length, otpDigits.length - 1)].focus();
+                syncOtpCode();
+            });
         });
 
         let activeWaifu = 'nino';
@@ -2114,6 +2170,10 @@
             authCode.required = false;
             authCode.style.display = 'none';
             authCode.value = '';
+            authCodeInputs.hidden = true;
+            otpChangeEmail.hidden = true;
+            otpDigits.forEach(input => { input.disabled = true; input.required = false; input.value = ''; });
+            authTabsContainer.hidden = false;
             // Restaurar campos que podrían haberse ocultado durante el flujo Supabase
             document.getElementById('auth-username-label').hidden = false;
             authUsername.hidden = false;
@@ -2144,13 +2204,6 @@
             authError.textContent = '';
             authSubmitBtn.disabled = true;
 
-            // Si estamos esperando el enlace de Supabase, el botón sirve como "ya confirmé / entrar"
-            if (authStep === 'supabase_pending') {
-                authSubmitBtn.disabled = false;
-                authError.textContent = 'Abre el enlace del correo y vuelve aquí. La página se actualizará sola al confirmar.';
-                return;
-            }
-
             authSubmitBtn.textContent = authStep === 'verify' ? 'Verificando…' : (authMode === 'register' ? 'Enviando…' : 'Entrando…');
             try {
                 if (authStep === 'credentials' && !termsAccept.checked) throw new Error('Debes aceptar los términos y condiciones para continuar.');
@@ -2163,27 +2216,6 @@
                     body: JSON.stringify(payload)
                 });
 
-                // Flujo Supabase: el servidor envió un enlace por email
-                if (res.status === 202 && data.status === 'verification_required' && data.supabase_flow) {
-                    authStep = 'supabase_pending';
-                    // Ocultar campos de formulario, mostrar aviso de "revisa tu correo"
-                    document.getElementById('auth-username-label').hidden = true;
-                    authUsername.hidden = true;
-                    registerFields.hidden = true;
-                    document.getElementById('auth-password-label').hidden = true;
-                    authPassword.hidden = true;
-                    authPassword.parentElement.hidden = true;
-                    document.getElementById('terms-accept-row').hidden = true;
-                    verificationFields.hidden = false;
-                    const hint = document.getElementById('verify-email-hint');
-                    if (hint) hint.textContent = `Hemos enviado un enlace a ${authEmail.value.trim()}. Ábrelo para activar tu cuenta y regresa aquí.`;
-                    authSubtitle.textContent = '¡Casi listo! Confirma tu correo.';
-                    authError.textContent = '';
-                    authSubmitBtn.textContent = 'Ya lo confirmé — Entrar';
-                    authSubmitBtn.disabled = false;
-                    return;
-                }
-
                 // Confirmación de cuenta mediante código OTP de Supabase.
                 if (res.status === 202 && data.status === 'verification_required') {
                     authStep = 'verify';
@@ -2192,17 +2224,20 @@
                     verificationFields.hidden = false;
                     authCode.style.display = '';
                     authCode.disabled = false;
-                    authCode.required = true;
+                    authCodeInputs.hidden = false;
+                    otpChangeEmail.hidden = false;
+                    otpDigits.forEach(input => { input.disabled = false; input.required = true; });
+                    authTabsContainer.hidden = true;
                     document.getElementById('auth-username-label').hidden = true;
                     authUsername.hidden = true;
                     document.getElementById('auth-password-label').hidden = true;
                     authPassword.hidden = true;
                     authPassword.parentElement.hidden = true;
                     document.getElementById('terms-accept-row').hidden = true;
-                    authCode.focus();
-                    authSubtitle.textContent = `Hemos enviado un código a ${authEmail.value.trim()}.`;
+                    otpDigits[0].focus();
+                    authSubtitle.textContent = `Introduce el código de seis cifras que enviamos a ${authEmail.value.trim()}.`;
                     const hint = document.getElementById('verify-email-hint');
-                    if (hint) hint.textContent = data.message || 'Introdúcelo aquí para activar tu cuenta.';
+                    if (hint) hint.textContent = 'Introduce aquí el código de seis cifras para activar tu cuenta. Si no encuentras el mensaje, revisa spam o correo no deseado.';
                     authError.textContent = '';
                     return;
                 }
@@ -2214,10 +2249,13 @@
                 authError.textContent = error.message || 'No se pudo conectar con el servidor.';
             } finally {
                 authSubmitBtn.disabled = false;
-                authSubmitBtn.textContent = authStep === 'verify' ? 'Verificar correo'
-                    : authStep === 'supabase_pending' ? 'Ya lo confirmé — Entrar'
+                authSubmitBtn.textContent = authStep === 'verify' ? 'Verificar código'
                     : (authMode === 'register' ? 'Crear cuenta' : 'Entrar');
             }
+        });
+
+        otpChangeEmail.addEventListener('click', () => {
+            document.querySelector('.auth-tab[data-auth-mode="register"]')?.click();
         });
 
         profileToggleBtn.addEventListener('click', openProfilePanel);
@@ -2255,85 +2293,12 @@
             showAuth();
         });
 
-        // ── DETECCIÓN DE ENLACE DE CONFIRMACIÓN DE SUPABASE ──────────────────────
-        // Cuando Supabase redirige tras confirmar el correo, añade a la URL un
-        // fragmento con access_token (y otros parámetros).  Lo detectamos aquí,
-        // limpiamos el hash para que no quede visible, y usamos el token para
-        // iniciar sesión automáticamente sin mostrar el formulario de registro.
-
-        async function handleSupabaseConfirmLink() {
-            const hash = window.location.hash;
-            if (!hash || !hash.includes('access_token')) return false;
-
-            // Parsear los parámetros del fragmento
-            const params = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
-            const accessToken = params.get('access_token');
-            const tokenType   = params.get('token_type') || 'bearer';
-            const refreshToken = params.get('refresh_token') || '';
-            const type         = params.get('type') || '';    // 'signup' | 'recovery' | etc.
-
-            if (!accessToken) return false;
-
-            // Limpiar el fragmento de la URL inmediatamente para no exponer el token
+        // Este flujo utiliza códigos OTP. Si se abre un enlace antiguo, elimina
+        // el token de la URL y muestra el acceso normal, sin volver a redirigir.
+        if (window.location.hash.includes('access_token')) {
             history.replaceState(null, '', window.location.pathname + window.location.search);
-
-            // Mostrar estado de carga en el overlay de auth
-            authOverlay.classList.add('visible');
-            authOverlay.setAttribute('aria-hidden', 'false');
-            authSubtitle.textContent = '¡Confirmando tu cuenta…';
-            authError.textContent    = '';
-            authSubmitBtn.disabled   = true;
-            authSubmitBtn.textContent = 'Confirmando…';
-
-            try {
-                // Enviar el token al backend para verificar la sesión con Supabase
-                const { res, data } = await apiFetch('/api/supabase-confirm', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        access_token:  accessToken,
-                        refresh_token: refreshToken,
-                        token_type:    tokenType,
-                        type:          type,
-                    }),
-                });
-
-                if (res.ok && data.status === 'ok') {
-                    // Sesión confirmada: cargar perfil y entrar directamente
-                    fillProfile(data.profile);
-                    hideAuth();
-                    // Pequeño saludo de bienvenida en el bocadillo
-                    if (type === 'signup') {
-                        showBubble('¡Cuenta confirmada! ¡Bienvenido/a!', false);
-                    }
-                    return true;
-                }
-
-                // El backend no pudo validar el token — mostrar error amigable
-                authError.textContent = data.message || 'No se pudo confirmar la cuenta. Inicia sesión manualmente.';
-                authSubmitBtn.disabled  = false;
-                authSubmitBtn.textContent = 'Entrar';
-                return false;
-
-            } catch (_) {
-                authError.textContent = 'No se pudo conectar con el servidor. Inicia sesión manualmente.';
-                authSubmitBtn.disabled  = false;
-                authSubmitBtn.textContent = 'Entrar';
-                return false;
-            }
         }
-
-        // Punto de entrada de sesión: primero intenta el enlace de Supabase,
-        // y si no, comprueba la cookie de sesión local habitual.
-        async function initSession() {
-            const handledBySupabase = await handleSupabaseConfirmLink();
-            if (!handledBySupabase) {
-                await loadSession();
-            }
-        }
-
-        // Comprueba la cookie al abrir la página; la sesión persiste durante 30 días.
-        initSession();
+        loadSession();
 
         function openConfigPanel() {
             configPanel.classList.add('open');

@@ -888,7 +888,7 @@ def api_register():
 
     return json_response({
         "status": "verification_required",
-        "message": "Te hemos enviado un código de 8 dígitos. Introdúcelo para activar tu cuenta.",
+        "message": "Te hemos enviado un código de 6 dígitos. Introdúcelo para activar tu cuenta.",
     }, 202)
 
 
@@ -900,8 +900,8 @@ def api_verify_email():
         return json_response({"status": "error", "message": "Supabase no está configurado en el servidor."}, 503)
     data = request_data()
     email, code = str(data.get("email", "")).strip().lower(), str(data.get("code", "")).strip()
-    if not re.fullmatch(r"\d{8}", code):
-        return json_response({"status": "error", "message": "Introduce el código de 8 dígitos del correo."}, 400)
+    if not re.fullmatch(r"\d{6}", code):
+        return json_response({"status": "error", "message": "Introduce el código de 6 dígitos del correo."}, 400)
     with db_connection() as conn:
         pending = db_execute(conn, "SELECT * FROM email_verifications WHERE email = ?", (email,)).fetchone()
         if not pending or pending["expires_at"] < time.time():
@@ -910,7 +910,7 @@ def api_verify_email():
             return json_response({"status": "error", "message": "Se agotaron los intentos. Vuelve a crear la cuenta."}, 429)
 
     # Verificar el código con Supabase Auth (el template Confirm signup debe
-    # incluir {{ .Token }} y el proyecto debe estar configurado con OTP de 8 cifras).
+    # incluir {{ .Token }} y el proyecto debe estar configurado con OTP de 6 cifras).
     try:
         sb_response = supabase_client.auth.verify_otp({
             "email": email,
