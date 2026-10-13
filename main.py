@@ -86,7 +86,8 @@ else:
         print("[Supabase] SUPABASE_URL / SUPABASE_KEY no configuradas — Auth de Supabase desactivado.")
 
 SESSION_COOKIE = "nino_session"
-TERMS_VERSION = "2026-10-05"
+SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 días, para sobrevivir al cierre del navegador.
+TERMS_VERSION = "2026-10-10"
 AVAILABLE_MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
@@ -278,9 +279,20 @@ def new_session_token():
     return secrets.token_urlsafe(48)
 
 
-def set_session_cookie(token):
-    response.set_cookie(SESSION_COOKIE, token, max_age=60 * 60 * 24 * 30,
-                        httponly=True, samesite="Lax", secure=False, path="/")
+def set_session_cookie(token, persistent=True):
+    # La app puede estar detrás de un proxy TLS (p. ej. Render), donde la
+    # conexión interna llega por HTTP aunque el navegador use HTTPS.
+    forwarded_proto = request.get_header("X-Forwarded-Proto", "").split(",", 1)[0].strip().lower()
+    is_https = forwarded_proto == "https" or request.urlparts.scheme == "https"
+    response.set_cookie(
+        SESSION_COOKIE,
+        token,
+        max_age=SESSION_COOKIE_MAX_AGE if persistent else None,
+        httponly=True,
+        samesite="Lax",
+        secure=is_https,
+        path="/",
+    )
 
 
 def clear_session_cookie():
@@ -939,7 +951,7 @@ def api_verify_email():
             return json_response({"status": "error", "message": "El nombre o correo ya está asociado a una cuenta."}, 409)
         db_execute(conn, "DELETE FROM email_verifications WHERE email = ?", (email,))
         user = db_execute(conn, "SELECT * FROM users WHERE session_token = ?", (token,)).fetchone()
-    set_session_cookie(token)
+    set_session_cookie(token, persistent=data.get("remember_session") is True)
     print(f"[Supabase] Código de confirmación validado para: {email}")
     return json_response({"status": "ok", "profile": public_profile(user)}, 201)
 
@@ -1006,7 +1018,7 @@ def api_login():
                     user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
             if not user:
                 return json_response({"status": "error", "message": "No se pudo preparar tu perfil. Inténtalo de nuevo."}, 500)
-            set_session_cookie(user["session_token"])
+            set_session_cookie(user["session_token"], persistent=data.get("remember_session") is True)
             print(f"[Supabase] Perfil local recuperado al iniciar sesión: {email}")
             return json_response({"status": "ok", "profile": public_profile(user), "supabase_access_token": sb_session.access_token})
         except Exception as sb_err:
@@ -1044,7 +1056,7 @@ def api_login():
         db_execute(conn, "UPDATE users SET session_token = ?, terms_accepted_at = ?, terms_version = ? WHERE id = ?",
                    (token, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), TERMS_VERSION, user["id"]))
         user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
-    set_session_cookie(token)
+    set_session_cookie(token, persistent=data.get("remember_session") is True)
 
     # Inicio de sesión paralelo en Supabase Auth (si está configurado)
     if supabase_client is not None and not supabase_access_token:
@@ -1147,7 +1159,7 @@ def api_supabase_confirm():
             )
             user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
 
-    set_session_cookie(token_local)
+    set_session_cookie(token_local, persistent=data.get("remember_session") is True)
     print(f"[Supabase] Confirmación exitosa para: {email}")
     return json_response({"status": "ok", "profile": public_profile(user)}, 200)
 
@@ -1161,6 +1173,21 @@ def api_logout():
         with db_connection() as conn:
             db_execute(conn, "UPDATE users SET session_token = NULL WHERE session_token = ?", (token,))
     clear_session_cookie()
+    return json_response({"status": "ok"})
+
+
+@server_app.route("/api/session-preference", method=["POST", "OPTIONS"])
+def api_session_preference():
+    if request.method == "OPTIONS":
+        return json_response({})
+    user = current_user()
+    if not user:
+        return json_response({"status": "error", "message": "Sesión no válida."}, 401)
+    data = request_data()
+    remember_session = data.get("remember_session")
+    if not isinstance(remember_session, bool):
+        return json_response({"status": "error", "message": "Preferencia de sesión no válida."}, 400)
+    set_session_cookie(user["session_token"], persistent=remember_session)
     return json_response({"status": "ok"})
 
 
@@ -1255,6 +1282,9 @@ def api_record():
 @server_app.route("/")
 def index():
     """Carga la interfaz principal avatar.html en la raíz del servidor."""
+    response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+    response.set_header("Pragma", "no-cache")
+    response.set_header("Expires", "0")
     return static_file("avatar.html", root=BASE_DIR)
 
 

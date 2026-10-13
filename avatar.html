@@ -29,7 +29,11 @@
             top: 0;
             left: 0;
             z-index: 1;
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.35s ease;
         }
+        body.avatar-authenticated canvas { visibility: visible; opacity: 1; }
 
         /* --- MANGA SPEECH BUBBLE (LADO IZQUIERDO) --- */
         .manga-container {
@@ -341,10 +345,29 @@
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 51, 102, 0); }
         }
 
-        /* Loading indicator */
-        .dots-loading span {
-            animation: blinkDots 1.4s infinite both;
-            font-size: 18px;
+        /* Indicador de espera con puntos en movimiento continuo. */
+        .dots-loading {
+            display: inline-flex;
+            align-items: baseline;
+            font-size: inherit;
+        }
+        .thinking-dots { display: inline-flex; margin-left: 1px; }
+        .thinking-dots i {
+            display: inline-block;
+            font-size: 1.15em;
+            font-style: normal;
+            opacity: 0.35;
+            animation: thinkingDot 1.15s ease-in-out infinite;
+        }
+        .thinking-dots i:nth-child(2) { animation-delay: 0.16s; }
+        .thinking-dots i:nth-child(3) { animation-delay: 0.32s; }
+        @keyframes thinkingDot {
+            0%, 60%, 100% { opacity: 0.28; transform: translateY(0); }
+            30% { opacity: 1; transform: translateY(-3px); }
+        }
+        @keyframes transcriptGlyphIn {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         @media (max-width: 768px) {
             .manga-container {
@@ -603,6 +626,79 @@
             font-weight: 500;
         }
 
+        /* Selector de aspecto del bocadillo, integrado con las tarjetas de cristal. */
+        .bubble-style-settings {
+            margin-top: 14px;
+            padding: 14px;
+            background: rgba(255, 255, 255, 0.55);
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            border-radius: 18px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+        }
+        .bubble-style-options {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .bubble-style-option {
+            min-height: 62px;
+            padding: 9px 10px;
+            border: 1.5px solid transparent;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.48);
+            color: #1C1C1E;
+            text-align: left;
+            font: inherit;
+            cursor: pointer;
+            transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .bubble-style-option:hover { background: rgba(255, 255, 255, 0.9); transform: translateY(-1px); }
+        .bubble-style-option.active {
+            background: #FFFFFF;
+            border-color: #FF3366;
+            box-shadow: 0 5px 14px rgba(255, 51, 102, 0.14);
+        }
+        .bubble-style-option-title { display: block; font-size: 12px; font-weight: 800; }
+        .bubble-style-option-copy { display: block; margin-top: 3px; color: rgba(60, 60, 67, 0.62); font-size: 10px; font-weight: 600; line-height: 1.3; }
+
+        /* En móvil, el modo compacto libera el centro de la escena para el modelo. */
+        @media (max-width: 768px) {
+            .manga-container.bubble-compact {
+                top: max(82px, calc(env(safe-area-inset-top) + 72px));
+                align-items: center;
+                gap: 0;
+                min-width: 0;
+            }
+            .manga-container.bubble-compact .user-whisper { display: none; }
+            .manga-container.bubble-compact .manga-bubble {
+                width: min(100%, 520px);
+                padding: 10px 14px 11px;
+                border-width: 2px;
+                border-radius: 18px;
+                box-shadow: 3px 3px 0 #1C1C1E;
+            }
+            .manga-container.bubble-compact .manga-header { margin-bottom: 4px; }
+            .manga-container.bubble-compact .manga-tag { font-size: 11px; padding: 2px 8px; }
+            .manga-container.bubble-compact .manga-tag-switch-hint { display: none; }
+            .manga-container.bubble-compact .manga-text {
+                min-height: 2.7em;
+                max-height: 2.7em;
+                overflow: hidden;
+                font-size: 13px;
+                line-height: 1.35;
+                white-space: pre-line;
+            }
+            .manga-container.bubble-compact .transcript-glyph {
+                animation: transcriptGlyphIn 0.24s ease-out both;
+            }
+            .config-panel {
+                top: 18px;
+                left: 18px;
+                max-height: calc(100vh - 36px);
+                overflow-y: auto;
+            }
+            .config-toggle-btn { top: 18px; left: 18px; }
+        }
         /* --- PERFIL Y CUENTA --- */
         .profile-toggle-btn {
             position: fixed;
@@ -752,6 +848,28 @@
         .terms-card h3 { margin:18px 0 5px; font-size:14px; }
         .terms-close { position:sticky; top:0; z-index:4; display:flex; align-items:center; justify-content:center; float:right; width:36px; height:36px; margin:-10px -10px -26px auto; border:1px solid rgba(28,28,30,.08); border-radius:50%; color:#1C1C1E; background:rgba(255,255,255,.94); box-shadow:0 4px 14px rgba(28,28,30,.12); font-size:24px; cursor:pointer; backdrop-filter:blur(10px); }
         .terms-close:hover { color:#fff; background:#FF3366; }
+        .cookie-banner { position:fixed; z-index:110; left:50%; bottom:18px; width:min(920px,calc(100% - 28px)); padding:20px; border:1px solid rgba(255,255,255,.88); border-radius:22px; background:rgba(255,255,255,.96); box-shadow:0 18px 55px rgba(28,28,30,.24); color:#1C1C1E; backdrop-filter:blur(18px); transform:translate(-50%,18px); opacity:0; pointer-events:none; transition:opacity .22s ease,transform .22s ease; }
+        .cookie-banner.visible { opacity:1; transform:translate(-50%,0); pointer-events:auto; }
+        .cookie-banner h2 { margin:0 0 6px; font-size:16px; font-weight:800; }
+        .cookie-banner p { margin:0; color:rgba(28,28,30,.72); font-size:12px; line-height:1.55; }
+        .cookie-banner a,.cookie-policy-link,.cookie-settings-link { color:#c92350; font-weight:800; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+        .cookie-policy-link { padding:0; border:0; background:transparent; font:inherit; }
+        .cookie-actions { display:flex; gap:9px; margin-top:15px; }
+        .cookie-action { flex:1; min-height:42px; padding:10px 12px; border:1px solid rgba(28,28,30,.14); border-radius:12px; color:#1C1C1E; background:#fff; cursor:pointer; font:800 12px 'Plus Jakarta Sans',sans-serif; }
+        .cookie-action:hover { border-color:#FF3366; box-shadow:0 5px 14px rgba(255,51,102,.12); }
+        .cookie-action.primary { color:#fff; background:#1C1C1E; border-color:#1C1C1E; }
+        .cookie-action.primary:hover { background:#FF3366; border-color:#FF3366; }
+        .cookie-settings-link,.legal-info-link { position:fixed; z-index:110; bottom:15px; left:15px; display:none; padding:8px 11px; border:1px solid rgba(255,255,255,.9); border-radius:999px; background:rgba(255,255,255,.86); box-shadow:0 4px 15px rgba(28,28,30,.12); color:#1C1C1E; font:800 10px 'Plus Jakarta Sans',sans-serif; text-decoration:none; backdrop-filter:blur(12px); cursor:pointer; }
+        .cookie-settings-link.visible { display:block; }
+        .legal-info-link { display:block; bottom:52px; }
+        .cookie-preference-row { display:flex; align-items:flex-start; gap:12px; margin:18px 0 6px; padding:14px; border:1px solid rgba(28,28,30,.09); border-radius:15px; background:rgba(255,247,249,.68); }
+        .cookie-preference-row input { width:19px; height:19px; margin:2px 0 0; accent-color:#FF3366; }
+        .cookie-preference-row strong { display:block; font-size:13px; }
+        .cookie-preference-row span { display:block; margin-top:3px; color:rgba(28,28,30,.68); font-size:11px; line-height:1.5; }
+        .cookie-required { flex:none; margin-left:auto; color:#168d49; font-size:10px; font-weight:800; }
+        .terms-dialog[hidden], .cookie-banner[hidden] { display:none !important; }
+        #cookie-preferences-dialog { z-index:150; }
+        @media (max-width:600px) { .cookie-banner { bottom:10px; padding:16px; } .cookie-actions { display:grid; grid-template-columns:1fr 1fr; } .cookie-action:last-child { grid-column:1 / -1; } .cookie-settings-link { bottom:10px; left:10px; } .legal-info-link { bottom:47px; left:10px; } }
         @media (max-width: 768px) { .profile-toggle-btn { top: 18px; right: 18px; } .profile-panel { top: 18px; right: 18px; max-height: calc(100vh - 36px); } }
         @media (max-width: 380px) { .otp-inputs { gap: 6px; } .otp-digit { width: 40px; height: 46px; } }
     </style>
@@ -766,6 +884,32 @@
     </script>
 </head>
 <body>
+    <section class="cookie-banner" id="cookie-banner" role="dialog" aria-modal="false" aria-labelledby="cookie-banner-title" aria-describedby="cookie-banner-copy" hidden>
+        <h2 id="cookie-banner-title">Tu privacidad, a tu manera 🍪</h2>
+        <p id="cookie-banner-copy">Usamos una cookie técnica para mantener la sesión mientras navegas. Si aceptas, también recordaremos tu inicio de sesión en este navegador durante un máximo de 30 días. Si rechazas, la sesión terminará al cerrar el navegador. La aplicación no integra herramientas de analítica ni publicidad. Puedes <button class="cookie-policy-link" id="cookie-open-policy" type="button">leer la política de privacidad y cookies</button>.</p>
+        <div class="cookie-actions">
+            <button class="cookie-action primary" id="cookie-accept" type="button">Aceptar y recordar 30 días</button>
+            <button class="cookie-action primary" id="cookie-reject" type="button">Rechazar cookies opcionales</button>
+            <button class="cookie-action" id="cookie-configure" type="button">Configurar</button>
+        </div>
+    </section>
+    <button class="cookie-settings-link" id="cookie-settings-link" type="button">🍪 Cookies</button>
+    <button class="legal-info-link" id="legal-info-link" type="button">Privacidad y términos</button>
+    <div class="terms-dialog" id="cookie-preferences-dialog" role="dialog" aria-modal="true" aria-labelledby="cookie-preferences-title" hidden>
+        <article class="terms-card">
+            <button class="terms-close" id="cookie-preferences-close" type="button" aria-label="Cerrar">&times;</button>
+            <h2 id="cookie-preferences-title">Preferencias de cookies</h2>
+            <p>Las cookies técnicas son necesarias para iniciar sesión y siempre están activas. Elige si quieres que Nino AI recuerde tu sesión al volver a abrir este navegador.</p>
+            <div class="cookie-preference-row">
+                <input id="cookie-remember-login" type="checkbox">
+                <label for="cookie-remember-login"><strong>Recordar mi inicio de sesión</strong><span>Cookie funcional propia, válida hasta 30 días. Si la desactivas, la cookie de autenticación será solo de sesión y se eliminará al cerrar el navegador.</span></label>
+            </div>
+            <div class="cookie-actions">
+                <button class="cookie-action primary" id="cookie-save-preferences" type="button">Guardar preferencias</button>
+                <button class="cookie-action primary" id="cookie-reject-from-settings" type="button">Rechazar cookies opcionales</button>
+            </div>
+        </article>
+    </div>
     <!-- Acceso y perfil de usuario -->
     <button class="profile-toggle-btn" id="profile-toggle-btn" title="Mi perfil" aria-label="Abrir perfil">◉</button>
     <aside class="profile-panel" id="profile-panel" aria-label="Panel de perfil">
@@ -825,7 +969,7 @@
             <label class="profile-label" id="auth-password-label" for="auth-password">Contraseña</label>
             <input class="profile-input" id="auth-password" type="password" autocomplete="current-password" required minlength="8" placeholder="Mínimo 8 caracteres">
             <div class="auth-extra" id="terms-accept-row">
-                <label class="auth-check"><input id="terms-accept" type="checkbox" required><span>He leído y acepto los <a class="auth-link" id="terms-open">términos y condiciones</a> y la información sobre mis datos.</span></label>
+                <label class="auth-check"><input id="terms-accept" type="checkbox" required><span>He leído y acepto los términos del servicio. <a class="auth-link" id="terms-open">Consulta la política de privacidad y cookies.</a></span></label>
             </div>
             <div class="auth-extra" id="verification-fields" hidden>
                 <div id="supabase-link-notice" style="text-align:center;padding:12px 4px 4px;line-height:1.55;">
@@ -851,15 +995,19 @@
     </div>
     <div class="terms-dialog" id="terms-dialog" role="dialog" aria-modal="true" aria-labelledby="terms-title">
         <article class="terms-card"><button class="terms-close" id="terms-close" type="button" aria-label="Cerrar">&times;</button>
-            <h2 id="terms-title">Términos y condiciones · Nino AI</h2>
-            <p><strong>Versión 05/10/2026.</strong> Al crear una cuenta o iniciar sesión confirmas que has leído y aceptas estas condiciones.</p>
+            <h2 id="terms-title">Términos, privacidad y cookies · Nino AI</h2>
+            <p><strong>Versión 10/10/2026.</strong> Al crear una cuenta aceptas los términos del servicio. La información de privacidad se facilita para que sepas qué datos usa la aplicación; las cookies opcionales se gestionan por separado en el panel «Cookies».</p>
             <h3>1. Servicio</h3><p>Nino AI ofrece una experiencia conversacional con personajes virtuales, generación de respuestas y síntesis de voz. Es un proyecto de entretenimiento; las respuestas pueden ser inexactas y no sustituyen asesoramiento profesional.</p>
-            <h3>2. Cuenta y uso responsable</h3><p>Debes proporcionar un nombre único, un correo válido y mantener la confidencialidad de tu contraseña. No uses el servicio para actividades ilícitas, perjudiciales o que vulneren derechos de terceros. Podemos suspender cuentas ante abusos o riesgos de seguridad.</p>
-            <h3>3. Datos y claves</h3><p>La aplicación almacena tu nombre, correo verificado, contraseña protegida mediante hash, sesión y preferencias. Si añades claves de Gemini o Fish Audio, se guardan vinculadas a tu cuenta para prestar la función elegida. No introduzcas datos sensibles. Las claves personales se envían al proveedor correspondiente cuando usas su servicio.</p>
-            <h3>4. Proveedores y alojamiento</h3><p>El servidor puede alojarse en Render y usar su infraestructura para procesar solicitudes y almacenar datos. La configuración puede utilizar PostgreSQL gestionado o, en desarrollo, SQLite. Las conversaciones pueden enviarse a Google Gemini y los textos de voz a Fish Audio o al servicio Edge TTS según tu configuración. Estos proveedores tratan datos conforme a sus propias condiciones y políticas.</p>
-            <h3>5. Disponibilidad y responsabilidad</h3><p>El servicio se ofrece tal cual y puede cambiar, interrumpirse o contener errores. En la medida permitida por la ley, Nino AI no garantiza disponibilidad continua ni responde por daños derivados del uso indebido, fallos de terceros o contenido generado automáticamente.</p>
-            <h3>6. Privacidad, conservación y contacto</h3><p>Los datos se usan para administrar la cuenta, prestar las funciones, verificar el correo y proteger el servicio. Se conservarán mientras la cuenta esté activa o sea necesario para estos fines. Para solicitar acceso o eliminación, contacta con el responsable del sitio a través del canal de contacto publicado en la web. La identidad y datos de contacto del responsable deben publicarse antes de ofrecer el servicio al público.</p>
-            <h3>7. Cambios y legislación</h3><p>Estas condiciones pueden actualizarse; se solicitará aceptación de la versión vigente. Se aplicará la normativa imperativa que corresponda al usuario y al responsable del servicio.</p>
+            <h3>2. Uso responsable</h3><p>Debes proporcionar datos de cuenta correctos, mantener la confidencialidad de tu contraseña y no usar el servicio para actividades ilícitas, perjudiciales o que vulneren derechos de terceros. El titular puede limitar cuentas ante abusos o riesgos de seguridad, de acuerdo con la normativa aplicable.</p>
+            <h3>3. Cuenta y credenciales</h3><p>Se guarda el nombre de usuario, el correo verificado, una huella criptográfica de la contraseña, el identificador de sesión y las preferencias de voz. Las claves de Gemini y Fish Audio que introduzcas se guardan asociadas a tu cuenta y se usan para prestar las funciones que elijas. No introduzcas datos sensibles en el chat ni en las claves.</p>
+            <h3>4. Privacidad y uso de datos</h3><p>Se tratan los datos de cuenta (nombre, correo, contraseña almacenada como hash criptográfico), identificador de sesión, preferencias, claves API guardadas en el perfil y contenido que escribas para generar respuestas y voz. La gestión de la cuenta y la prestación solicitada se vinculan a la relación de servicio; la seguridad del servicio puede basarse en el interés legítimo del titular. La cookie de 30 días solo se usa si la aceptas. El titular debe confirmar y documentar las bases jurídicas definitivas.</p><p>Para el registro y la verificación del correo se utiliza Supabase. Los mensajes se envían a Google Gemini para generar respuestas; el texto de voz se procesa con Fish Audio, Google Gemini o Edge TTS, según la configuración. El servidor de la aplicación puede estar alojado en Render. Según la información facilitada por el titular, la base de datos está en Frankfurt (Alemania). La página carga fuentes de Google Fonts y bibliotecas de JavaScript desde jsDelivr; al descargarlas, esos proveedores reciben datos técnicos de conexión como la dirección IP y el navegador. La región del servidor de aplicación, las transferencias internacionales, la relación jurídica y las condiciones de cada proveedor deben confirmarse según la configuración y los contratos activos.</p>
+            <p>Las claves API se transmiten al proveedor correspondiente cuando solicitas una función. Evita escribir información especialmente sensible. La aplicación no ofrece actualmente un control de usuario para descargar o borrar una cuenta; las solicitudes de derechos deben dirigirse al responsable, cuyos datos de contacto deben publicarse en esta página antes de ofrecer el servicio. El titular debe definir y comunicar los plazos de conservación y el procedimiento de supresión de cuentas. Si el servicio se ofrece a menores, debe completarse la información y las medidas aplicables antes de permitir su registro.</p>
+            <h3>5. Cookies y almacenamiento local</h3><p>La cookie propia <code>nino_session</code> autentica tu cuenta. Es HttpOnly y SameSite=Lax; se marca como Secure cuando el sitio se sirve por HTTPS. Si rechazas las cookies opcionales, dura solo la sesión del navegador. Si aceptas «Recordar mi inicio de sesión», dura hasta 30 días. El código de la aplicación no integra herramientas de analítica ni publicidad. La preferencia se guarda en el almacenamiento local del navegador para recordar tu elección y puedes cambiarla con el botón «Cookies» de la esquina inferior izquierda.</p>
+            <p>El almacenamiento de elección usa la clave local <code>nino_cookie_consent</code> e incluye la preferencia, versión y fecha de elección; se conserva durante seis meses y después se vuelve a preguntar. La cookie técnica es necesaria para el inicio de sesión que solicitas; la persistencia de 30 días es opcional y solo se activa tras aceptarla. Puedes retirar esa elección en cualquier momento desde «Cookies»; al rechazarla, la sesión actual pasa a ser de navegador.</p>
+            <h3>6. Conservación y derechos</h3><p>El perfil y las claves permanecen asociados a la cuenta hasta que se eliminen conforme a un procedimiento que debe publicar el responsable. Las conversaciones se mantienen en memoria del servidor durante su ejecución y pueden enviarse a los proveedores descritos para generar la respuesta o la voz. Para ejercer los derechos de acceso, rectificación, supresión, oposición, limitación o portabilidad, o reclamar ante la AEPD, deben facilitarse aquí los datos y el canal de contacto del responsable.</p>
+            <h3>7. Responsable y contacto</h3><p>Contacto para consultas de privacidad y ejercicio de derechos: <a href="mailto:angeljapon2012@gmail.com">angeljapon2012@gmail.com</a>. Sitio web: <a href="https://omni-wifu-46do.onrender.com/" target="_blank" rel="noopener noreferrer">https://omni-wifu-46do.onrender.com/</a>. La base de datos está en Frankfurt (Alemania), según la información facilitada por el titular.</p><p><strong>Información aún pendiente del titular:</strong> nombre legal o razón social, domicilio postal, forma jurídica y NIF si corresponden, y datos registrales cuando sean exigibles. También se debe confirmar la región del servidor de aplicación, los proveedores activos, sus contratos, posibles transferencias internacionales y los plazos de conservación. Estos datos deben completarse antes de considerar el aviso legal listo para publicación.</p>
+            <h3>8. Disponibilidad y responsabilidad</h3><p>El servicio puede cambiar, interrumpirse o contener errores. Estas condiciones no limitan los derechos irrenunciables que reconozca la normativa aplicable ni excluyen responsabilidades que legalmente no puedan limitarse.</p>
+            <h3>9. Cambios</h3><p>Se publicará la fecha de actualización de estas condiciones y, cuando corresponda, se solicitará de nuevo la aceptación de los términos. Los consentimientos opcionales se pueden retirar en cualquier momento desde el panel de cookies.</p>
         </article>
     </div>
 
@@ -904,6 +1052,20 @@
             <div class="waifu-detail-header">Personalidad & Estilo</div>
             <p id="waifu-desc-display" class="waifu-desc">Aunque tiene su característico toque tsundere y algo orgulloso, es dulce, atenta, cariñosa y cercana con quien habla.</p>
         </div>
+
+        <div class="bubble-style-settings" aria-labelledby="bubble-style-title">
+            <div class="waifu-detail-header" id="bubble-style-title">Burbuja de texto</div>
+            <div class="bubble-style-options" role="group" aria-label="Aspecto de la burbuja de texto">
+                <button class="bubble-style-option active" type="button" data-bubble-style="classic" aria-pressed="true">
+                    <span class="bubble-style-option-title">✦ Clásica</span>
+                    <span class="bubble-style-option-copy">El bocadillo completo de siempre.</span>
+                </button>
+                <button class="bubble-style-option" type="button" data-bubble-style="compact" aria-pressed="false">
+                    <span class="bubble-style-option-title">☰ Compacta</span>
+                    <span class="bubble-style-option-copy">En móvil, muestra hasta dos líneas arriba.</span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Bocadillo Manga a la Izquierda -->
@@ -944,7 +1106,7 @@
         scene.background = new THREE.Color(0xE8EEF3);
 
         const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20);
-        // Centrado frontal perfecto a la altura de los ojos/rostro del modelo (x: 0, y: 1.25)
+        // El encuadre de escritorio conserva la composición original.
         camera.position.set(0, 1.28, 1.95);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -955,11 +1117,31 @@
         document.body.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
-        // Objetivo en el centro exacto del rostro (x: 0, y: 1.22)
+        // El valor inicial se sustituye por la posición real de la cabeza en móvil.
         controls.target.set(0, 1.22, 0);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.update();
+
+        const mobileViewport = window.matchMedia('(max-width: 768px)');
+        const mobileFaceTarget = new THREE.Vector3(0, 1.22, 0);
+        function frameMobileFace(vrm) {
+            if (!mobileViewport.matches || !vrm?.humanoid) return;
+            const head = vrm.humanoid.getNormalizedBoneNode('head');
+            if (!head) return;
+            // Medimos con el personaje en su posición final, aunque aún esté entrando en escena.
+            const previousPosition = vrm.scene.position.clone();
+            vrm.scene.position.set(0, 0, 0);
+            vrm.scene.updateMatrixWorld(true);
+            head.getWorldPosition(mobileFaceTarget);
+            mobileFaceTarget.y += 0.035;
+            vrm.scene.position.copy(previousPosition);
+            vrm.scene.updateMatrixWorld(true);
+
+            controls.target.copy(mobileFaceTarget);
+            camera.position.set(mobileFaceTarget.x, mobileFaceTarget.y + 0.035, mobileFaceTarget.z + 1.52);
+            controls.update();
+        }
 
         const light = new THREE.DirectionalLight(0xffffff, 1.25);
         light.position.set(1.5, 3.5, 2).normalize();
@@ -968,6 +1150,9 @@
 
         let currentVrm = undefined;
         let modelLoadId = 0;
+        let avatarAuthenticated = window.__ninoSessionAuthenticated === true;
+        let animationFrameId = null;
+        let animationElapsed = 0;
         const loader = new GLTFLoader();
         loader.register((parser) => new VRMLoaderPlugin(parser));
 
@@ -992,17 +1177,23 @@
         };
 
         // ══════════════════════════════════════════════════════════════
-        //  WALK ENTRANCE — Entrada con variaciones por personalidad
+        //  WALK ENTRANCE — Entrada natural como una persona real
+        //  El personaje entra de lado (mirando en la dirección de marcha),
+        //  gira suavemente mientras camina y queda de frente al llegar.
         // ══════════════════════════════════════════════════════════════
         const walkEntrance = {
             active: false,
             progress: 0,
-            duration: 2.4,
-            startX: 2.2,
+            // Nino entra rápido y segura; Miku un poco más suave
+            duration: 2.6,
+            startX: 2.4,
             targetX: 0,
-            walkPortion: 0.72,
+            targetZ: 0,
+            // La marcha ocupa el 75 % del tiempo; el 25 % restante es asentamiento
+            walkPortion: 0.75,
             frontRotation: Math.PI,
-            entryRotation: Math.PI / 2,
+            // entryRotation se calcula al iniciar según el lado de entrada
+            entryRotation: Math.PI * 1.5,
             bounceActive: false,
             bounceProgress: 0,
             waifuName: 'nino',
@@ -1014,37 +1205,41 @@
 
                 this.progress = Math.min(1, this.progress + delta / this.duration);
                 const walkProgress = Math.min(1, this.progress / this.walkPortion);
-                const turnProgress = Math.max(0, (this.progress - this.walkPortion) / (1 - this.walkPortion));
 
-                // Nino: entrada decidida con desaceleración brusca al llegar (tsundere no se detiene suavemente)
-                // Miku: curva más suave con pequeño overshoot (idol entusiasta)
+                // Easing de posición: Nino más brusca al frenar, Miku más orgánica
                 const eased = isNino
-                    ? 1 - Math.pow(1 - walkProgress, 2.2)
-                    : 1 - Math.pow(1 - walkProgress, 3);
+                    ? 1 - Math.pow(1 - walkProgress, 2.4)
+                    : 1 - Math.pow(1 - walkProgress, 3.0);
 
                 let posX = THREE.MathUtils.lerp(this.startX, this.targetX, eased);
-                // Miku: ligero overshoot al llegar — rebasa un poquito y vuelve
-                if (isMiku && walkProgress > 0.85) {
-                    posX -= Math.sin((walkProgress - 0.85) / 0.15 * Math.PI) * 0.05;
+                // Miku: pequeño overshoot y retorno
+                if (isMiku && walkProgress > 0.88) {
+                    posX -= Math.sin((walkProgress - 0.88) / 0.12 * Math.PI) * 0.04;
                 }
 
-                // Giro hacia cámara: ease in-out cuadrático
-                const turnEased = turnProgress < 0.5
-                    ? 2 * turnProgress * turnProgress
-                    : 1 - Math.pow(-2 * turnProgress + 2, 2) / 2;
-
-                const stepsPerCycle = isMiku ? 6.5 : 5.5;
-                const phase = walkProgress * Math.PI * stepsPerCycle;
-                // Fade the gait in and out so the final step settles instead of snapping.
-                const stride = Math.sin(phase) * Math.sin(Math.PI * walkProgress);
-                const humanoid = vrm.humanoid;
-                const sign = vrm._isVRM1 ? -1 : 1;
-
-                vrm.scene.position.x = posX;
-                // Miku sube más en cada paso (más energética)
-                vrm.scene.position.y = Math.abs(stride) * (isMiku ? 0.027 : 0.016);
+                // El giro arranca tarde (cuando ya lleva medio camino andado)
+                // y termina antes de que el personaje se detenga: así la
+                // rotación sucede durante la marcha, no estático en el sitio.
+                const turnStart = 0.35;
+                const turnEnd   = 0.82;
+                const rawTurn   = THREE.MathUtils.clamp((walkProgress - turnStart) / (turnEnd - turnStart), 0, 1);
+                // Smoothstep para que el giro sea continuo y sin tirones
+                const turnEased = rawTurn * rawTurn * (3 - 2 * rawTurn);
                 vrm.scene.rotation.y = THREE.MathUtils.lerp(this.entryRotation, this.frontRotation, turnEased);
 
+                // Zancada: fade in al principio y fade out al llegar
+                const stepsPerCycle = isMiku ? 6.5 : 5.5;
+                const phase  = walkProgress * Math.PI * stepsPerCycle;
+                const stride = Math.sin(phase) * Math.sin(Math.PI * walkProgress);
+
+                vrm.scene.position.x = posX;
+                // Ligera curva de profundidad — evita desplazamiento puramente lateral
+                vrm.scene.position.z = this.targetZ - Math.sin(walkProgress * Math.PI) * (isMiku ? 0.14 : 0.10);
+                // Bobbing vertical suave
+                vrm.scene.position.y = Math.abs(stride) * (isMiku ? 0.026 : 0.015);
+
+                const humanoid = vrm.humanoid;
+                const sign = vrm._isVRM1 ? -1 : 1;
                 if (humanoid) {
                     const leftUpperArm  = humanoid.getNormalizedBoneNode('leftUpperArm');
                     const rightUpperArm = humanoid.getNormalizedBoneNode('rightUpperArm');
@@ -1053,20 +1248,22 @@
                     const leftLowerLeg  = humanoid.getNormalizedBoneNode('leftLowerLeg');
                     const rightLowerLeg = humanoid.getNormalizedBoneNode('rightLowerLeg');
 
-                    const armSwing  = isMiku ? 0.42 : 0.28;
-                    const legSwing  = isMiku ? 0.46 : 0.36;
-                    const kneeSwing = isMiku ? 0.58 : 0.44;
+                    const armSwing  = isMiku ? 0.38 : 0.26;
+                    const legSwing  = isMiku ? 0.44 : 0.34;
+                    const kneeSwing = isMiku ? 0.55 : 0.42;
 
-                    if (leftUpperArm)  { leftUpperArm.rotation.z  = sign * 1.38; leftUpperArm.rotation.x  = -stride * armSwing; }
-                    if (rightUpperArm) { rightUpperArm.rotation.z = -sign * 1.38; rightUpperArm.rotation.x = stride * armSwing; }
-                    if (leftUpperLeg)  leftUpperLeg.rotation.x  = stride * legSwing;
+                    // Brazos caídos con balanceo natural de marcha
+                    if (leftUpperArm)  { leftUpperArm.rotation.z  =  sign * 1.38; leftUpperArm.rotation.x  = -stride * armSwing; }
+                    if (rightUpperArm) { rightUpperArm.rotation.z = -sign * 1.38; rightUpperArm.rotation.x =  stride * armSwing; }
+                    if (leftUpperLeg)  leftUpperLeg.rotation.x  =  stride * legSwing;
                     if (rightUpperLeg) rightUpperLeg.rotation.x = -stride * legSwing;
                     if (leftLowerLeg)  leftLowerLeg.rotation.x  = Math.max(0, -stride) * kneeSwing;
-                    if (rightLowerLeg) rightLowerLeg.rotation.x = Math.max(0, stride) * kneeSwing;
+                    if (rightLowerLeg) rightLowerLeg.rotation.x = Math.max(0,  stride) * kneeSwing;
                 }
 
                 if (this.progress >= 1) {
-                    vrm.scene.position.set(this.targetX, 0, 0);
+                    vrm.scene.position.set(this.targetX, 0, this.targetZ);
+                    vrm.scene.rotation.y = this.frontRotation;
                     this.active = false;
                     if (isMiku) { this.bounceActive = true; this.bounceProgress = 0; }
                 }
@@ -1076,10 +1273,9 @@
             updateBounce(vrm, delta) {
                 if (!this.bounceActive || !vrm) return;
                 this.bounceProgress += delta;
-                const t = this.bounceProgress / 0.6;
+                const t = this.bounceProgress / 0.55;
                 if (t >= 1) { this.bounceActive = false; vrm.scene.position.y = 0; return; }
-                // Rebote amortiguado de Miku al llegar
-                const bounce = Math.sin(t * Math.PI * 2.2) * (1 - t) * 0.06;
+                const bounce = Math.sin(t * Math.PI * 2.0) * (1 - t) * 0.055;
                 vrm.scene.position.y = Math.max(0, bounce);
             },
 
@@ -1087,6 +1283,69 @@
                 this.active = false; this.progress = 0;
                 this.bounceActive = false; this.bounceProgress = 0;
             }
+        };
+
+        function beginCharacterEntrance(vrm, waifuName) {
+            if (!vrm || !avatarAuthenticated) return;
+            const modelConfig = waifuModels[waifuName] || waifuModels.nino;
+            walkEntrance.reset();
+            walkEntrance.frontRotation = modelConfig.frontRotation;
+            // Entra desde la derecha (posX > 0): debe mirar hacia la izquierda
+            // es decir, 90° menos que la rotación frontal (en sentido negativo Y).
+            // frontRotation = Math.PI → mirando al frente con el modelo invertido.
+            // entryRotation = frontRotation + Math.PI/2 → mirando en la dirección
+            // de avance (hacia la cámara-izquierda) sin estar de espaldas.
+            walkEntrance.entryRotation = modelConfig.frontRotation + Math.PI / 2;
+            walkEntrance.waifuName = waifuName;
+            walkEntrance.duration = waifuName === 'nino' ? 2.6 : 2.9;
+            vrm.scene.visible = true;
+            vrm.scene.position.set(walkEntrance.startX, 0, 0);
+            vrm.scene.rotation.y = walkEntrance.entryRotation;
+            walkEntrance.active = true;
+            walkEntrance.progress = 0;
+            idleRestless.notify();
+            gestureSystem.reset();
+            expressionController.reset();
+        }
+
+        function startAnimationLoop() {
+            if (!avatarAuthenticated || !currentVrm || animationFrameId !== null) return;
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        function stopAnimationLoop() {
+            if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+
+        function warmAvatarShaders(vrm) {
+            if (!vrm || typeof renderer.compileAsync !== 'function') return;
+            // Prepara los shaders mientras el canvas permanece oculto durante el acceso.
+            vrm.scene.visible = true;
+            try {
+                renderer.compileAsync(scene, camera).catch(() => {}).finally(() => {
+                    if (currentVrm === vrm && !avatarAuthenticated) vrm.scene.visible = false;
+                });
+            } catch (_) {
+                if (!avatarAuthenticated) vrm.scene.visible = false;
+            }
+        }
+
+        window.setAvatarAuthenticated = function (isAuthenticated) {
+            avatarAuthenticated = isAuthenticated === true;
+            if (!avatarAuthenticated) {
+                document.body.classList.remove('avatar-authenticated');
+                if (currentVrm) currentVrm.scene.visible = false;
+                stopAnimationLoop();
+                return;
+            }
+            if (!currentVrm) {
+                document.body.classList.remove('avatar-authenticated');
+                return;
+            }
+            document.body.classList.add('avatar-authenticated');
+            beginCharacterEntrance(currentVrm, activeWaifuAnim);
+            startAnimationLoop();
         };
 
         function cargarWaifu(waifuName) {
@@ -1109,27 +1368,19 @@
                     animate._warned = false;
                     currentVrm = vrm;
                     activeWaifuAnim = waifuName;
+                    vrm.scene.visible = false;
                     scene.add(vrm.scene);
 
-                    // Entra mirando hacia la izquierda (dirección del recorrido).
-                    // Al llegar, la secuencia usa frontRotation para mirar a cámara.
-                    walkEntrance.frontRotation = modelConfig.frontRotation;
-                    walkEntrance.entryRotation = modelConfig.frontRotation - Math.PI / 2;
-                    walkEntrance.waifuName = waifuName;
-                    // Nino: 2.3s decidida. Miku: 2.7s con más pasos y energía.
-                    walkEntrance.duration = waifuName === 'nino' ? 2.3 : 2.7;
-                    vrm.scene.rotation.y = walkEntrance.entryRotation;
+                    vrm.scene.rotation.y = modelConfig.frontRotation;
+                    frameMobileFace(vrm);
 
                     // Detectar si el modelo utiliza convención VRM 1.0 o VRM 0.0
                     const isVRM1 = (vrm.meta && vrm.meta.metaVersion === '1') || !!(gltf.parser.json?.extensions?.VRMC_vrm);
                     vrm._isVRM1 = isVRM1;
 
-                    // Posicionar inicialmente a la derecha para la animación de entrada caminando
-                    vrm.scene.position.set(walkEntrance.startX, 0, 0);
-
-                    // Estado de animación de entrada caminando desde la derecha
-                    walkEntrance.active = true;
-                    walkEntrance.progress = 0;
+                    // La escena se prepara durante el inicio de sesión y se revela
+                    // con la entrada completa cuando el servidor valida la cuenta.
+                    vrm.scene.position.set(0, 0, 0);
 
                     if (vrm.humanoid) {
                         // Pose de reposo natural: brazos caídos a los lados con una ligera separación
@@ -1142,9 +1393,17 @@
                         if (RUA0) RUA0.rotation.z = -sign * 1.38;
                         if (LLA0) LLA0.rotation.z = sign * 0.05;
                         if (RLA0) RLA0.rotation.z = -sign * 0.05;
+                        // Guardamos la pose que el propio modelo necesita para
+                        // tener los brazos caídos. Los gestos serán variaciones
+                        // relativas a ella, no poses T fijadas para otro VRM.
+                        gestureSystem.captureRestPose(vrm);
                     }
                     hairPhysics.init(vrm);
                     clothPhysics.init(vrm);
+                    warmAvatarShaders(vrm);
+                    if (avatarAuthenticated) {
+                        window.setAvatarAuthenticated(true);
+                    }
                 },
                 () => {},
                 (err) => {
@@ -1165,6 +1424,16 @@
                 this._targets[name] = { value: Math.max(0, Math.min(1, value)), speed };
                 if (this._current[name] === undefined) this._current[name] = 0;
             },
+            setBlink(value, speed = 28) {
+                // Algunos VRM usan un par de párpados y otros un preset único.
+                // Alimentamos ambas convenciones de forma segura; los nombres que
+                // no existan son ignorados por el gestor de expresiones.
+                this.set('blink', value, speed);
+                this.set('blinkLeft', value, speed);
+                this.set('blinkRight', value, speed);
+                this.set('blink_l', value, speed);
+                this.set('blink_r', value, speed);
+            },
             update(vrm, delta) {
                 if (!vrm || !vrm.expressionManager) return;
                 for (const name in this._targets) {
@@ -1173,8 +1442,9 @@
                     const next = cur + (t.value - cur) * Math.min(1, delta * t.speed);
                     this._current[name] = next;
                     try { vrm.expressionManager.setValue(name, next); } catch(e) {}
-                    // Aliases VRM0 ↔ VRM1
-                    const alias = { aa:'a', ih:'i', ou:'u', ee:'e', oh:'o', happy:'joy' }[name];
+                    // Aliases VRM0 ↔ VRM1. Los fonemas se actualizan uno a uno,
+                    // evitando que cinco morphs de boca se sumen a la vez.
+                    const alias = { aa:'a', ih:'i', ou:'u', ee:'e', oh:'o', happy:'joy', relaxed:'neutral' }[name];
                     if (alias) try { vrm.expressionManager.setValue(alias, next); } catch(e) {}
                 }
             },
@@ -1286,99 +1556,98 @@
         };
         // ══════════════════════════════════════════════════════════════
         //  SPEECH GESTURE SYSTEM — Gestos diferenciados por personalidad
-        //  Nino (tsundere): gestos asertivos, brazos cruzados, señalar
+        //  Nino (tsundere): gestos contenidos, seguros, a media altura
         //  Miku  (idol):    gestos abiertos, rítmicos, entusiastas
+        //
+        //  Los valores son DELTAS sobre la pose de reposo capturada:
+        //    z > 0 → brazo se acerca al torso (baja)
+        //    z < 0 → brazo se separa del torso (sube) ← usar con mucho cuidado
+        //    x > 0 → brazo hacia delante
+        //    x < 0 → brazo hacia atrás
+        //  La pose de reposo ya tiene sign*1.38 rad en z, así que un delta
+        //  de ±0.30 ya es mucho — no superar ±0.45 para evitar poses rotas.
         // ══════════════════════════════════════════════════════════════
         const gestureSystem = {
             idx: 8,       // 8 = idle relajado (posición neutra por defecto)
             timer: 0,
             interval: 2.8,
+            basePose: null,
 
-            // ── Gestos de NINO (tsundere) ── índices 0–4
+            captureRestPose(vrm) {
+                if (!vrm?.humanoid) return;
+                this.basePose = {};
+                ['LUA', 'RUA', 'LLA', 'RLA'].forEach((key) => {
+                    const boneName = { LUA: 'leftUpperArm', RUA: 'rightUpperArm', LLA: 'leftLowerArm', RLA: 'rightLowerArm' }[key];
+                    const bone = vrm.humanoid.getNormalizedBoneNode(boneName);
+                    if (bone) this.basePose[key] = { x: bone.rotation.x, y: bone.rotation.y, z: bone.rotation.z };
+                });
+            },
+
+            rest(key) {
+                return this.basePose?.[key] || { x: 0, y: 0, z: key.startsWith('L') ? 1.4 : -1.4 };
+            },
+
+            // ── Gestos de NINO (tsundere) ── índices 0–3
+            // Amplitudes pequeñas: Nino es contenida y segura, no exagerada.
+            // Los brazos nunca suben más de ~30° del reposo.
             gesturesNino: [
-                // 0: Explica con autoridad — señala con el dedo derecho levantado
+                // 0: Explica con calma — brazo derecho ligeramente adelantado, natural
                 (t, s) => ({
-                    LUA:{z:1.30+Math.sin(t*1.5)*0.02, x:0.01},
-                    RUA:{z:-(0.62+Math.sin(t*1.8)*0.06*s), x:-0.22*s},
-                    LLA:{z:0.04, x:Math.sin(t*1.7)*0.03*s},
-                    RLA:{z:-0.18*s, x:-0.32*s}
+                    LUA:{z: 0.04, x: 0.01}, RUA:{z:-0.18, x: 0.20},
+                    LLA:{z: 0.02, x: 0.04}, RLA:{z:-0.10, x: 0.28}
                 }),
-                // 1: Tsundere — voltea la cabeza, brazo cruzado
+                // 1: Reflexiva — brazo izquierdo cruzado en la cintura, derecho quieto
                 (t, s) => ({
-                    LUA:{z:0.72+Math.sin(t*1.1)*0.03, x:0.38*s},
-                    RUA:{z:-(0.72+Math.sin(t*1.1)*0.03), x:-0.38*s},
-                    LLA:{z:0.22*s, x:0.12*s},
-                    RLA:{z:-0.22*s, x:-0.12*s}
+                    LUA:{z: 0.10, x: 0.15}, RUA:{z:-0.08, x: 0.10},
+                    LLA:{z: 0.06, x: 0.18}, RLA:{z:-0.05, x: 0.14}
                 }),
-                // 2: Pensativa — mano apoya la barbilla, pose reflexiva
+                // 2: Énfasis — pequeño acento con la muñeca, NO sube el hombro
                 (t, s) => ({
-                    LUA:{z:1.28+Math.sin(t*0.9)*0.02, x:0},
-                    RUA:{z:-(0.38+Math.sin(t*1.2)*0.025*s), x:-0.42*s},
-                    LLA:{z:0.02, x:0},
-                    RLA:{z:0.05*s, x:-0.55*s}
+                    LUA:{z: 0.04, x: 0.02},
+                    RUA:{z:-0.16 + Math.sin(t * 2.8) * 0.04, x: 0.18 + Math.sin(t * 2.8) * 0.03},
+                    LLA:{z: 0.02, x: 0.03},
+                    RLA:{z:-0.09 + Math.sin(t * 2.8) * 0.03, x: 0.24}
                 }),
-                // 3: Énfasis fuerte — corta el aire con la mano derecha
+                // 3: Cercana pero reservada — ambas manos a la altura de la cadera
                 (t, s) => ({
-                    LUA:{z:1.22+Math.sin(t*1.4)*0.03, x:0.04*s},
-                    RUA:{z:-(0.58+Math.sin(t*3.2)*0.12*s), x:-0.18*s},
-                    LLA:{z:0.06, x:Math.sin(t*3.2)*0.08*s},
-                    RLA:{z:-0.14*s, x:-0.24*s}
-                }),
-                // 4: Orgullosa — manos en caderas (pequeña variación)
-                (t, s) => ({
-                    LUA:{z:0.88+Math.sin(t*0.8)*0.02, x:0.28*s},
-                    RUA:{z:-(0.88+Math.sin(t*0.8)*0.02), x:-0.28*s},
-                    LLA:{z:0.30*s, x:0.18*s},
-                    RLA:{z:-0.30*s, x:-0.18*s}
+                    LUA:{z: 0.08, x: 0.12}, RUA:{z:-0.10, x: 0.14},
+                    LLA:{z: 0.05, x: 0.12}, RLA:{z:-0.07, x: 0.18}
                 }),
             ],
 
-            // ── Gestos de MIKU (idol alegre) ── índices 5–9
+            // ── Gestos de MIKU (idol alegre) ── más amplios pero siempre humanamente posibles
             gesturesMiku: [
-                // 5: Entusiasta — ambas manos arriba con bounce
+                // 0: Bienvenida abierta — ambos brazos a la altura del pecho, simétrico
                 (t, s) => ({
-                    LUA:{z:0.58+Math.sin(t*3.8+0.3)*0.18*s, x:0.14*s},
-                    RUA:{z:-(0.58+Math.sin(t*3.8)*0.18*s), x:-0.14*s},
-                    LLA:{z:0.12*s, x:Math.sin(t*4.0)*0.10*s},
-                    RLA:{z:-0.12*s, x:Math.sin(t*4.0+0.5)*0.10*s}
+                    LUA:{z:-0.22 + Math.sin(t * 2.4 + 0.3) * 0.04, x: 0.18},
+                    RUA:{z:-0.22 + Math.sin(t * 2.4) * 0.04,        x: 0.18},
+                    LLA:{z:-0.12, x: 0.14}, RLA:{z:-0.12, x: 0.14}
                 }),
-                // 6: Melodiosa — manos dibujan ondas en el aire
+                // 1: Melodiosa — ola suave y redondeada a media altura
                 (t, s) => ({
-                    LUA:{z:0.82+Math.sin(t*2.2)*0.14*s, x:0.12*s},
-                    RUA:{z:-(0.82+Math.sin(t*2.2+1.2)*0.14*s), x:-0.12*s},
-                    LLA:{z:0.18*s, x:Math.cos(t*2.8)*0.12*s},
-                    RLA:{z:-0.18*s, x:Math.cos(t*2.8+0.9)*0.12*s}
+                    LUA:{z:-0.14 + Math.sin(t * 2.0) * 0.05,        x: 0.14},
+                    RUA:{z:-0.18 + Math.sin(t * 2.0 + 0.9) * 0.05,  x: 0.14},
+                    LLA:{z:-0.08, x: 0.10}, RLA:{z:-0.10, x: 0.16}
                 }),
-                // 7: Alegre — rebota suavemente
+                // 2: Alegre — ritmo suave de hombros sin exceder el pecho
                 (t, s) => ({
-                    LUA:{z:1.02+Math.sin(t*4.2)*0.16*s, x:Math.sin(t*2.5)*0.09*s},
-                    RUA:{z:-(1.02+Math.sin(t*4.2+1.0)*0.16*s), x:-Math.sin(t*2.5)*0.09*s},
-                    LLA:{z:0.08*s, x:Math.sin(t*4.5)*0.08*s},
-                    RLA:{z:-0.08*s, x:Math.sin(t*4.5+0.6)*0.08*s}
+                    LUA:{z:-0.16 + Math.sin(t * 3.0) * 0.05, x: 0.12},
+                    RUA:{z:-0.16 + Math.sin(t * 3.0 + 0.7) * 0.05, x: 0.12},
+                    LLA:{z:-0.08, x: 0.08}, RLA:{z:-0.08, x: 0.08}
                 }),
-                // 8: Wink/coqueta — una mano sube hacia el ojo
+                // 3: Coqueta — mano derecha cerca del hombro, nunca tapa la cara
                 (t, s) => ({
-                    LUA:{z:1.30+Math.sin(t*1.0)*0.02, x:0.02},
-                    RUA:{z:-(0.44+Math.sin(t*1.4)*0.04*s), x:-0.32*s},
-                    LLA:{z:0.04, x:0},
-                    RLA:{z:0.04*s, x:-0.42*s}
-                }),
-                // 9: Presenta — brazos abiertos invitando al público
-                (t, s) => ({
-                    LUA:{z:0.68+Math.sin(t*1.5)*0.08*s, x:0.16*s},
-                    RUA:{z:-(0.68+Math.sin(t*1.5+0.4)*0.08*s), x:-0.16*s},
-                    LLA:{z:0.22*s, x:Math.sin(t*2.0)*0.07*s},
-                    RLA:{z:-0.22*s, x:Math.sin(t*2.0+0.8)*0.07*s}
+                    LUA:{z: 0.04, x: 0.06}, RUA:{z:-0.24, x: 0.20},
+                    LLA:{z: 0.02, x: 0.04}, RLA:{z:-0.14, x: 0.26}
                 }),
             ],
 
-            // ── Idle neutro (8): brazos caídos, respiración sutil ──
+            // ── Idle neutro: brazos caídos, respiración sutil ──
             idlePose(t) {
                 return {
-                    LUA:{z:1.42+Math.sin(t*1.4)*0.014, x:0.018+Math.sin(t*0.85)*0.009},
-                    RUA:{z:-1.42-Math.sin(t*1.4)*0.014, x:-0.018-Math.sin(t*0.85)*0.009},
-                    LLA:{z:0.05+Math.sin(t*1.55+0.6)*0.018, x:0},
-                    RLA:{z:-0.05-Math.sin(t*1.55+0.6)*0.018, x:0}
+                    LUA:{z: 0.010 + Math.sin(t * 1.4) * 0.008, x: Math.sin(t * 0.85) * 0.008},
+                    RUA:{z: 0.010 + Math.sin(t * 1.4 + 0.5) * 0.008, x:-Math.sin(t * 0.85) * 0.008},
+                    LLA:{z: 0.006, x: 0}, RLA:{z: 0.006, x: 0}
                 };
             },
 
@@ -1388,13 +1657,13 @@
                 const pool = isNino ? this.gesturesNino : this.gesturesMiku;
                 const poolSize = pool.length;
 
-                if (speaking > 0.1 && !this.wasSpeaking && this.pendingIntent) {
+                if (speaking > 0.1 && !this.wasSpeaking) {
                     const intentGestures = isNino
-                        ? { explain: 0, playful: 1, reflect: 2, emphatic: 3, warm: 0 }
-                        : { explain: 9, playful: 8, reflect: 6, emphatic: 5, warm: 6 };
-                    this.idx = intentGestures[this.pendingIntent] ?? this.idx;
+                        ? { explain: 0, playful: 3, reflect: 1, emphatic: 2, warm: 3 }
+                        : { explain: 1, playful: 3, reflect: 1, emphatic: 0, warm: 0 };
+                    this.idx = intentGestures[this.pendingIntent] ?? Math.floor(Math.random() * poolSize);
                     this.timer = 0;
-                    this.interval = 2.6;
+                    this.interval = 2.0 + Math.random() * 0.8;
                     this.pendingIntent = null;
                 }
                 this.wasSpeaking = speaking > 0.1;
@@ -1403,8 +1672,8 @@
                 if (speaking > 0.1) {
                     this.timer += delta;
                     const changeInterval = isNino
-                        ? 2.2 + Math.random() * 2.4   // Nino: gestos más frecuentes y asertivos
-                        : 1.8 + Math.random() * 2.8;  // Miku: más variada, cambia más rápido
+                        ? 2.5 + Math.random() * 1.2   // Nino: gestos firmes, con pausas deliberadas
+                        : 2.2 + Math.random() * 1.3;  // Miku: cadencia alegre sin cambios bruscos
                     if (this.timer > this.interval) {
                         this.timer = 0;
                         this.interval = changeInterval;
@@ -1430,19 +1699,24 @@
                     RLA: vrm.humanoid.getNormalizedBoneNode('rightLowerArm')
                 };
 
-                // Interpolación más suave para Miku (más fluida), más directa para Nino
-                const blendSpeed = isNino ? 3.2 : 4.0;
-                const sp  = Math.min(1, delta * blendSpeed);
-                const spF = Math.min(1, delta * (blendSpeed + 0.8));
+                // Interpolación suave y un peso progresivo: ningún gesto arranca
+                // con el brazo ya levantado al empezar a hablar.
+                const blendSpeed = isNino ? 4.1 : 4.8;
+                const sp  = 1 - Math.exp(-delta * blendSpeed);
+                const spF = 1 - Math.exp(-delta * (blendSpeed + 0.8));
+                const gestureWeight = this.idx >= poolSize ? 1 : THREE.MathUtils.smoothstep(speaking, 0.08, 0.62);
 
                 for (const [key, bone] of Object.entries(bones)) {
                     if (!bone || !g[key]) continue;
-                    const targetZ = g[key].z * sign;
+                    const base = this.rest(key);
+                    const side = key.startsWith('L') ? 1 : -1;
+                    const targetZ = base.z + (g[key].z || 0) * (-side) * sign * gestureWeight;
+                    const targetX = base.x + (g[key].x || 0) * gestureWeight;
                     bone.rotation.z += (targetZ - bone.rotation.z) * sp;
-                    bone.rotation.x += (g[key].x - bone.rotation.x) * spF;
+                    bone.rotation.x += (targetX - bone.rotation.x) * spF;
                 }
             },
-            reset() { this.idx = 8; this.timer = 0; this.wasSpeaking = false; this.pendingIntent = null; }
+            reset() { this.idx = 8; this.timer = 0; this.wasSpeaking = false; this.pendingIntent = null; this.basePose = null; }
         };
 
         // ══════════════════════════════════════════════════════════════
@@ -1454,25 +1728,32 @@
             lastInteraction: Date.now(),
             phase: 0,
             actionTimer: 0,
-            actionInterval: 5.5,
+            actionInterval: 3.2,
             action: 'none',
             actionProgress: 0,
 
-            notify() { this.lastInteraction = Date.now(); this.phase = 0; },
+            notify() {
+                this.lastInteraction = Date.now();
+                this.phase = 0;
+                this.actionTimer = 0;
+                this.actionInterval = 3.2;
+                this.action = 'none';
+                this.actionProgress = 0;
+            },
 
             update(delta, isSpeaking, waifuName) {
                 if (isSpeaking) { this.lastInteraction = Date.now(); return { rs: 0, action: 'none', ap: 0, phase: 0 }; }
                 const elapsed = (Date.now() - this.lastInteraction) / 1000;
                 let rs = 0;
 
-                if (elapsed > 30) { rs = Math.min(1, (elapsed - 30) / 10) * 0.9; this.phase = 2; }
-                else if (elapsed > 15) { rs = Math.min(1, (elapsed - 15) / 8) * 0.7; this.phase = 1; }
+                if (elapsed > 24) { rs = Math.min(1, (elapsed - 24) / 10) * 0.9; this.phase = 2; }
+                else if (elapsed > 8) { rs = Math.min(1, (elapsed - 8) / 8) * 0.7; this.phase = 1; }
                 else this.phase = 0;
 
                 this.actionTimer += delta;
                 if (this.actionTimer > this.actionInterval && this.phase >= 1) {
                     this.actionTimer = 0;
-                    this.actionInterval = 3.2 + Math.random() * 5.0;
+                    this.actionInterval = 4.5 + Math.random() * 3.0;
 
                     // Nino se impacienta → acciones más tsundere
                     // Miku se distrae → acciones más curiosas y suaves
@@ -1495,27 +1776,118 @@
         let speakingSmooth = 0;
         let isListening   = false;
         let listenSmooth  = 0;
+        let speechAttitude = 'neutral';
+
+        // La amplitud real del audio gobierna la apertura de la boca.
+        // smoothingTimeConstant bajo → respuesta más rápida a transientes de voz.
+        const speechAudio = {
+            context: null,
+            analyser: null,
+            source: null,
+            samples: null,
+            audio: null,
+            level: 0,
+            // Peak suavizado para normalizar el nivel relativo al volumen real del audio
+            peakSmooth: 0.001,
+
+            attach(audio) {
+                this.detach();
+                this.audio = audio;
+                this.peakSmooth = 0.001;
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContextClass) return;
+                try {
+                    this.context = this.context || new AudioContextClass();
+                    this.analyser = this.context.createAnalyser();
+                    this.analyser.fftSize = 256;
+                    // Valor bajo: el analizador reacciona rápido a cada sílaba.
+                    // Con 0.55 el RMS quedaba aplastado y la boca casi no se movía.
+                    this.analyser.smoothingTimeConstant = 0.25;
+                    this.samples = new Uint8Array(this.analyser.fftSize);
+                    this.source = this.context.createMediaElementSource(audio);
+                    this.source.connect(this.analyser);
+                    this.analyser.connect(this.context.destination);
+                    this.context.resume().catch(() => {});
+                } catch (_) {
+                    this.analyser = null;
+                    this.source = null;
+                }
+            },
+
+            detach() {
+                try { this.source?.disconnect(); } catch (_) {}
+                try { this.analyser?.disconnect(); } catch (_) {}
+                this.source = null;
+                this.analyser = null;
+                this.samples = null;
+                this.audio = null;
+                this.level = 0;
+                this.peakSmooth = 0.001;
+            },
+
+            update(delta, time) {
+                let target = 0;
+                if (isSpeaking) {
+                    if (this.analyser && this.samples) {
+                        this.analyser.getByteTimeDomainData(this.samples);
+                        let energy = 0;
+                        for (const sample of this.samples) {
+                            const centered = (sample - 128) / 128;
+                            energy += centered * centered;
+                        }
+                        const rms = Math.sqrt(energy / this.samples.length);
+                        // Actualizar peak con decaimiento suave → normalización relativa
+                        this.peakSmooth = Math.max(this.peakSmooth * 0.998, rms);
+                        const peak = Math.max(0.012, this.peakSmooth);
+                        // Mapeo con curva de potencia para que sílabas suaves también abran la boca
+                        const normalized = Math.min(1, (rms / peak) * 1.15);
+                        target = Math.pow(normalized, 0.65);
+                        // Umbral mínimo de ruido
+                        if (rms < 0.004) target = 0;
+                    } else {
+                        // Fallback expresivo para navegadores sin Web Audio API
+                        const raw = Math.sin(time * 12) * 0.5 + Math.sin(time * 19) * 0.3
+                                  + Math.sin(time * 7.5) * 0.2;
+                        target = THREE.MathUtils.clamp(0.35 + raw * 0.40, 0.05, 0.85);
+                    }
+                }
+                // Apertura rápida (sílaba), cierre más suave (coarticulación)
+                const blend = 1 - Math.exp(-delta * (target > this.level ? 28 : 14));
+                this.level += (target - this.level) * blend;
+                return this.level;
+            }
+        };
 
         window.setNinoSpeaking = function(val) {
             isSpeaking = val;
+            if (!val) speechAudio.detach();
             if (val) idleRestless.notify();
             const dot = document.getElementById('status-dot');
             if (dot) { val ? dot.classList.add('speaking') : dot.classList.remove('speaking'); }
+        };
+        window.setNinoSpeechAudio = function(audio) {
+            if (audio) speechAudio.attach(audio);
         };
         window.setNinoSpeechText = function(text) {
             const message = String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
             if (/\b(que tal|como estas|hola|encantad|me alegra|genial|increible|feliz|jaja|jeje)\b/.test(message)) {
                 gestureSystem.pendingIntent = 'warm';
+                speechAttitude = 'warm';
             } else if (/\b(lo siento|entiendo|tranquil|preocup|dificil|aqui estoy|te escucho|animo|cuidate)\b/.test(message)) {
                 gestureSystem.pendingIntent = 'reflect';
+                speechAttitude = 'reflect';
             } else if (/\b(por que|como|cuando|donde|que opinas|crees que)\b/.test(message) || message.includes('?')) {
                 gestureSystem.pendingIntent = 'reflect';
+                speechAttitude = 'reflect';
             } else if (/!|\b(oye|basta|claro que|por supuesto|obvio|sin duda|definitivamente)\b/.test(message)) {
                 gestureSystem.pendingIntent = activeWaifuAnim === 'nino' ? 'emphatic' : 'playful';
+                speechAttitude = 'emphatic';
             } else if (/\b(primero|despues|por ejemplo|significa|consiste|paso|explico|en resumen|porque)\b/.test(message)) {
                 gestureSystem.pendingIntent = 'explain';
+                speechAttitude = 'explain';
             } else {
                 gestureSystem.pendingIntent = null;
+                speechAttitude = 'neutral';
             }
         };
         window.setNinoListening = function(val) {
@@ -1523,10 +1895,15 @@
             if (val) idleRestless.notify();
         };
 
+        let previousCameraMobileViewport = mobileViewport.matches;
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
+            if (previousCameraMobileViewport !== mobileViewport.matches) {
+                previousCameraMobileViewport = mobileViewport.matches;
+                if (mobileViewport.matches && currentVrm) frameMobileFace(currentVrm);
+            }
         });
 
         // ══════════════════════════════════════════════════════════════
@@ -1541,12 +1918,13 @@
         let microTimer = 0, nextMicro = 4 + Math.random() * 5, microExpr = 'none', microProg = 0;
 
         function animate() {
-            requestAnimationFrame(animate);
+            animationFrameId = null;
+            if (!avatarAuthenticated || !currentVrm) return;
+            animationFrameId = requestAnimationFrame(animate);
             const delta = Math.min(clock.getDelta(), 0.05);
-            const time  = clock.getElapsedTime();
+            animationElapsed += delta;
+            const time = animationElapsed;
             controls.update();
-
-            if (!currentVrm) { renderer.render(scene, camera); return; }
 
             try {
                 const waifu   = activeWaifuAnim;
@@ -1582,13 +1960,13 @@
                 if (chest) {
                     if (isNino) {
                         // Nino: respiración más contenida y tensa al hablar
-                        chest.rotation.x = Math.sin(time*1.7)*0.016 + Math.sin(time*3.2)*0.006
+                        chest.rotation.x = Math.sin(time*1.7)*0.020 + Math.sin(time*3.2)*0.008
                                          + Math.sin(time*4.8)*0.028*S + Math.sin(time*2.4)*0.014*rs;
                         chest.rotation.y = Math.sin(time*1.1)*0.009 + Math.sin(time*2.4)*0.022*S;
                         chest.rotation.z = Math.sin(time*0.85+1.2)*0.007*rs;
                     } else {
                         // Miku: respiración más amplia y rítmica (idol con energía)
-                        chest.rotation.x = Math.sin(time*2.0)*0.022 + Math.sin(time*3.8)*0.009
+                        chest.rotation.x = Math.sin(time*2.0)*0.028 + Math.sin(time*3.8)*0.011
                                          + Math.sin(time*5.5)*0.018*S + Math.sin(time*2.8)*0.016*rs;
                         chest.rotation.y = Math.sin(time*1.4)*0.012 + Math.sin(time*3.0)*0.026*S;
                         chest.rotation.z = Math.sin(time*1.1+0.8)*0.010*rs + Math.sin(time*2.2)*0.008*S;
@@ -1605,7 +1983,7 @@
                     let hX, hY, hZ;
                     if (isNino) {
                         // Nino: ligera inclinación hacia atrás (altiva), movimiento más seco
-                        hX = -0.04 + Math.sin(time*0.75)*0.010
+                         hX = -0.04 + Math.sin(time*0.75)*0.016
                            + (Math.sin(time*6.5)*0.030 + Math.sin(time*3.0)*0.018)*S
                            + Math.sin(time*1.05)*0.032*rs + 0.04*L;
                         hY = Math.sin(time*0.55)*0.022 + Math.cos(time*0.22)*0.013
@@ -1614,7 +1992,7 @@
                            + Math.sin(time*0.48)*0.011*rs;
                     } else {
                         // Miku: inclina la cabeza con curiosidad, más tilting y expresiva
-                        hX = 0.02 + Math.sin(time*0.85)*0.014
+                         hX = 0.02 + Math.sin(time*0.85)*0.022
                            + (Math.sin(time*7.2)*0.038 + Math.sin(time*3.4)*0.022)*S
                            + Math.sin(time*1.15)*0.028*rs + 0.06*L;
                         hY = Math.sin(time*0.65)*0.030 + Math.cos(time*0.28)*0.018
@@ -1640,9 +2018,10 @@
 
                     // Blending más suave para Miku, más directo para Nino
                     const headSpeed = isNino ? 5.5 : 7.0;
-                    head.rotation.x += (hX - head.rotation.x) * Math.min(1, delta * headSpeed);
-                    head.rotation.y += (hY - head.rotation.y) * Math.min(1, delta * headSpeed);
-                    head.rotation.z += (hZ - head.rotation.z) * Math.min(1, delta * headSpeed);
+                    const headBlend = 1 - Math.exp(-delta * headSpeed);
+                    head.rotation.x += (hX - head.rotation.x) * headBlend;
+                    head.rotation.y += (hY - head.rotation.y) * headBlend;
+                    head.rotation.z += (hZ - head.rotation.z) * headBlend;
                 }
 
                 // ── 3. Cuello ──
@@ -1654,12 +2033,12 @@
                 // ── 4. Caderas — Miku con balanceo rítmico ──
                 if (hips) {
                     if (isNino) {
-                        hips.rotation.y = Math.sin(time*1.55)*0.010 + Math.sin(time*2.1)*0.018*S
+                        hips.rotation.y = Math.sin(time*1.55)*0.014 + Math.sin(time*2.1)*0.018*S
                                         + Math.sin(time*2.3+0.8)*0.024*rs;
                         hips.rotation.z = Math.sin(time*1.25+1.0)*0.007*rs;
                     } else {
                         // Miku: cadera con ritmo musical suave, incluso en idle
-                        hips.rotation.y = Math.sin(time*1.8)*0.014 + Math.sin(time*2.4)*0.022*S
+                        hips.rotation.y = Math.sin(time*1.8)*0.020 + Math.sin(time*2.4)*0.022*S
                                         + Math.sin(time*2.6+0.9)*0.028*rs
                                         + Math.sin(time*1.2)*0.009;   // swaying base
                         hips.rotation.z = Math.sin(time*1.4+0.8)*0.010*rs
@@ -1677,68 +2056,89 @@
                 // ── 5. Gestos con brazos (solo fuera de la entrada) ──
                 if (!isEntering) gestureSystem.update(currentVrm, delta, time, S, waifu);
 
-                // ── Acción idle: arreglarse el pelo ──
+                // ── Acción idle: arreglarse el pelo — mano al oído/cuello ──
                 if (IR.action === 'hairTouch' && RUA) {
                     const c = Math.sin(Math.min(1, Math.max(0, IR.ap / 2.8)) * Math.PI);
                     const sign = currentVrm._isVRM1 ? -1 : 1;
-                    // Nino: la mano va al lado del cuello/oreja (pose orgullosa)
-                    // Miku: la mano sube más arriba, pose más coqueta
-                    const targetZ = isNino ? -sign * 0.40 : -sign * 0.36;
-                    const targetX = isNino ? -0.52 : -0.60;
-                    RUA.rotation.z += (targetZ - RUA.rotation.z) * (c * Math.min(1, delta * 3.8));
-                    RUA.rotation.x += (targetX - RUA.rotation.x) * (c * Math.min(1, delta * 3.8));
-                    if (RLA) RLA.rotation.x += (-0.48 - RLA.rotation.x) * (c * Math.min(1, delta * 3.8));
+                    // El brazo derecho sube moderadamente (a la altura de la oreja),
+                    // no más arriba del hombro. targetZ relativo a reposo (-1.38):
+                    // -0.68 en VRM0 = brazo elevado ~40° por encima del reposo. Natural.
+                    const targetZRUA = -sign * 0.68;
+                    const targetXRUA = 0.28;  // ligeramente hacia adelante
+                    const sp = c * Math.min(1, delta * 4.0);
+                    RUA.rotation.z += (targetZRUA - RUA.rotation.z) * sp;
+                    RUA.rotation.x += (targetXRUA - RUA.rotation.x) * sp;
+                    // Antebrazo: doblar el codo para llevar la mano a la cabeza
+                    if (RLA) RLA.rotation.x += (0.55 - RLA.rotation.x) * sp;
                 }
 
                 // ── Acción tsundere: brazos cruzados (solo Nino) ──
                 if (IR.action === 'armsCross' && isNino && LUA && RUA) {
                     const c = Math.sin(Math.min(1, Math.max(0, IR.ap / 2.8)) * Math.PI);
                     const sign = currentVrm._isVRM1 ? -1 : 1;
-                    LUA.rotation.z += (sign * 0.72 - LUA.rotation.z) * (c * Math.min(1, delta * 3.2));
-                    LUA.rotation.x += (0.55 - LUA.rotation.x) * (c * Math.min(1, delta * 3.2));
-                    RUA.rotation.z += (-sign * 0.72 - RUA.rotation.z) * (c * Math.min(1, delta * 3.2));
-                    RUA.rotation.x += (-0.55 - RUA.rotation.x) * (c * Math.min(1, delta * 3.2));
+                    // Pose de brazos cruzados realista: los codos bajan hacia el torso
+                    // No tan extrema como antes — evita que parezca pose de yoga
+                    LUA.rotation.z += (sign * 0.65 - LUA.rotation.z) * (c * Math.min(1, delta * 3.2));
+                    LUA.rotation.x += (0.45 - LUA.rotation.x) * (c * Math.min(1, delta * 3.2));
+                    RUA.rotation.z += (-sign * 0.65 - RUA.rotation.z) * (c * Math.min(1, delta * 3.2));
+                    RUA.rotation.x += (-0.45 - RUA.rotation.x) * (c * Math.min(1, delta * 3.2));
                 }
 
-                // ── Acción Miku: sway rítmico de brazos ──
+                // ── Acción Miku: sway rítmico de brazos (más suave, natural) ──
                 if (IR.action === 'sway' && isMiku && LUA && RUA) {
                     const c = Math.sin(Math.min(1, IR.ap / 2.8) * Math.PI);
                     const sign = currentVrm._isVRM1 ? -1 : 1;
-                    LUA.rotation.z += (sign * 1.15 - LUA.rotation.z) * (c * Math.min(1, delta * 2.5));
-                    RUA.rotation.z += (-sign * 1.15 - RUA.rotation.z) * (c * Math.min(1, delta * 2.5));
-                    LUA.rotation.x += (Math.sin(IR.ap*2.0)*0.18 - LUA.rotation.x) * (c * Math.min(1, delta * 2.5));
-                    RUA.rotation.x += (-Math.sin(IR.ap*2.0)*0.18 - RUA.rotation.x) * (c * Math.min(1, delta * 2.5));
+                    // Sway suave: los brazos oscilan a los lados como al bailar
+                    const swayAmplitude = 0.18;
+                    const swayAngle = Math.sin(IR.ap * 1.8) * swayAmplitude;
+                    LUA.rotation.z += (sign * (1.38 - swayAmplitude + swayAngle) - LUA.rotation.z) * (c * Math.min(1, delta * 2.5));
+                    RUA.rotation.z += (-sign * (1.38 - swayAmplitude - swayAngle) - RUA.rotation.z) * (c * Math.min(1, delta * 2.5));
+                    LUA.rotation.x += (swayAngle * 0.12 - LUA.rotation.x) * (c * Math.min(1, delta * 2.5));
+                    RUA.rotation.x += (-swayAngle * 0.12 - RUA.rotation.x) * (c * Math.min(1, delta * 2.5));
                 }
 
-                // ── 6. Lip-sync — más variado y ajustado por personaje ──
+                // ── 6. Lip-sync — gobernado por el nivel real del audio ──
+                // audioLevel es el nivel RMS normalizado de la señal de voz.
+                // S es el suavizado binario (0→1 cuando empieza a hablar).
+                // Combinamos ambos: S abre el canal, audioLevel modula la amplitud.
+                const audioLevel = speechAudio.update(delta, time);
                 if (S > 0.02) {
-                    const cycle = Math.sin(time*14)*0.42 + Math.sin(time*23)*0.28 + 0.30;
-                    const mo    = Math.max(0, Math.min(1, cycle)) * S;
-                    const vw    = (Math.sin(time*5.2) + 1) * 0.5;
-                    const vowelX = (Math.sin(time*3.8) + 1) * 0.5;
-                    expressionController.set('aa', mo*(0.80-vw*0.30),         14);
-                    expressionController.set('oh', mo*vw*0.62,                 14);
-                    expressionController.set('ih', mo*0.25*(1-vw),             14);
-                    expressionController.set('ee', mo*0.18*vowelX,             14);
-                    expressionController.set('ou', mo*0.12*(1-vowelX),         14);
+                    // Ciclo de vocales realista: aa/oh dominan, ih/ee/ou añaden riqueza
+                    const vw    = (Math.sin(time * 4.8) + 1) * 0.5;
+                    const vowelY = (Math.sin(time * 3.1 + 0.9) + 1) * 0.5;
+
+                    // Apertura máxima proporcional al nivel de audio real
+                    const mouthOpen = audioLevel * S;
+
+                    // Nino: boca más discreta (tsundere no exagera)
+                    // Miku: boca más expresiva y abierta (idol vocaliza más)
+                    const maxOpen = isNino ? 0.78 : 0.92;
+                    const mo = mouthOpen * maxOpen;
+
+                    expressionController.set('aa', mo * (0.72 - vw * 0.28),     20);
+                    expressionController.set('oh', mo * vw * 0.70,               20);
+                    expressionController.set('ih', mo * 0.30 * (1 - vw),         20);
+                    expressionController.set('ee', mo * 0.22 * vowelY,           20);
+                    expressionController.set('ou', mo * 0.18 * (1 - vowelY),     20);
 
                     if (isNino) {
-                        // Nino: expresión happy contenida + pequeño angry cuando habla fuerte
-                        expressionController.set('happy',   0.22+S*0.12,   5);
-                        expressionController.set('angry',   S*0.12,         4);
-                        expressionController.set('relaxed', 0.08,           4);
+                        // Nino al hablar: ligero happy, nunca muy exagerado
+                        // Importante: no mezclar angry con happy (puede deformar ojos)
+                        expressionController.set('happy',   0.18 + S * 0.08, 5);
+                        expressionController.set('relaxed', 0.06,            4);
+                        expressionController.set('angry',   0,               5);  // Resetear para evitar ojos raros
                     } else {
-                        // Miku: siempre alegre y radiante al hablar
-                        expressionController.set('happy',   0.42+S*0.18,   5);
-                        expressionController.set('relaxed', 0.15,           4);
-                        expressionController.set('surprised', S*0.10,       4);
+                        // Miku al hablar: alegre y radiante
+                        expressionController.set('happy',   0.38 + S * 0.14, 5);
+                        expressionController.set('relaxed', 0.12,            4);
+                        expressionController.set('surprised', 0,             5);  // Resetear para evitar ojos raros
                     }
                 } else {
-                    expressionController.set('aa',  0, 10);
-                    expressionController.set('oh',  0, 10);
-                    expressionController.set('ih',  0, 10);
-                    expressionController.set('ou',  0, 10);
-                    expressionController.set('ee',  0, 10);
+                    expressionController.set('aa',  0, 14);
+                    expressionController.set('oh',  0, 14);
+                    expressionController.set('ih',  0, 14);
+                    expressionController.set('ou',  0, 14);
+                    expressionController.set('ee',  0, 14);
                     if (isNino) {
                         expressionController.set('happy',   0.14,  3);
                         expressionController.set('relaxed', 0.06,  3);
@@ -1769,42 +2169,56 @@
                 if (IR.action === 'sigh') {
                     expressionController.set('relaxed', Math.sin(IR.ap*Math.PI/1.1)*0.50, 5);
                 }
-                expressionController.set('surprised', L*(isNino ? 0.22 : 0.35), isListening ? 8 : 5);
+                // surprised solo se activa al escuchar y NUNCA mientras habla
+                // (evita que los ojos queden muy abiertos y raros durante el habla)
+                if (!isSpeaking) {
+                    expressionController.set('surprised', L*(isNino ? 0.22 : 0.35), isListening ? 8 : 5);
+                } else {
+                    expressionController.set('surprised', 0, 8);
+                }
 
                 // ── 8. Microexpresiones — distintas por personaje ──
                 microTimer += delta;
                 if (microTimer > nextMicro && !isSpeaking) {
                     microTimer = 0; nextMicro = 4 + Math.random() * 7;
-                    const ninoMicros  = ['blush','angry','relaxed','surprised'];
-                    const mikuMicros  = ['blush','happy','relaxed','surprised','wink'];
+                    // Evitar microexpresiones que afecten a los ojos de forma rara
+                    // 'angry' y 'surprised' solo cuando no hay otras expresiones activas
+                    const ninoMicros  = ['blush', 'relaxed', 'angry', 'surprised'];
+                    const mikuMicros  = ['blush', 'happy', 'relaxed', 'surprised'];
                     const pool = isNino ? ninoMicros : mikuMicros;
                     microExpr = pool[Math.floor(Math.random() * pool.length)];
                     microProg = 0;
                 }
                 if (microExpr !== 'none' && !isSpeaking) {
                     microProg += delta;
-                    const intensity = isNino ? 0.30 : 0.38;
-                    expressionController.set(microExpr, Math.max(0, Math.sin(microProg*Math.PI/1.3)*intensity), 7);
-                    if (microProg > 1.3) microExpr = 'none';
+                    const intensity = isNino ? 0.28 : 0.35;
+                    expressionController.set(microExpr, Math.max(0, Math.sin(microProg*Math.PI/1.4)*intensity), 7);
+                    if (microProg > 1.4) microExpr = 'none';
+                } else if (isSpeaking && microExpr !== 'none') {
+                    // Limpiar microexpresión al empezar a hablar
+                    expressionController.set(microExpr, 0, 6);
+                    microExpr = 'none';
                 }
 
-                // ── 9. Parpadeo orgánico — Nino parpadea más lento (pose seria) ──
+                // ── 9. Parpadeo orgánico — natural, no interfiere con los ojos al hablar ──
                 blinkTimer += delta;
                 if (!isBlinking && blinkTimer > nextBlink) {
                     isBlinking = true; blinkTimer = 0;
                     // Nino: guiño doble menos frecuente. Miku: guiño coqueto más frecuente.
-                    isDouble = Math.random() < (isNino ? 0.20 : 0.35); doubleStage = 0;
+                    isDouble = Math.random() < (isNino ? 0.18 : 0.30); doubleStage = 0;
                 }
                 if (isBlinking) {
-                    const blinkSpeed = isNino ? 0.13 : 0.11; // Miku parpadea más rápido
-                    expressionController.set('blink', Math.max(0, Math.sin((blinkTimer/blinkSpeed)*Math.PI)), 32);
+                    const blinkSpeed = isNino ? 0.12 : 0.10;
+                    const blinkVal = Math.max(0, Math.sin((blinkTimer / blinkSpeed) * Math.PI));
+                    // Usar setBlink que cubre todas las convenciones de nombres VRM0/VRM1
+                    expressionController.setBlink(blinkVal, 36);
                     if (blinkTimer >= blinkSpeed) {
-                        if (isDouble && doubleStage === 0) { doubleStage = 1; blinkTimer = -0.07; }
+                        if (isDouble && doubleStage === 0) { doubleStage = 1; blinkTimer = -0.06; }
                         else {
-                            expressionController.set('blink', 0, 32);
+                            expressionController.setBlink(0, 36);
                             isBlinking = false; blinkTimer = 0;
-                            const baseInterval = isNino ? 3.0 : 2.4; // Miku parpadea más seguido
-                            nextBlink = (baseInterval + Math.random() * 3.0) * (rs > 0.3 ? 0.55 : 1.0);
+                            const baseInterval = isNino ? 3.2 : 2.6;
+                            nextBlink = (baseInterval + Math.random() * 2.8) * (rs > 0.3 ? 0.55 : 1.0);
                         }
                     }
                 }
@@ -1830,8 +2244,7 @@
         }
 
         cargarWaifu('nino');
-        animate();
-    </script>    </script>
+    </script>
 
     <!-- Lógica de Interacción en Tiempo Real -->
     <script>
@@ -1841,6 +2254,7 @@
         const ninoText = document.getElementById('nino-text');
         const userWhisper = document.getElementById('user-whisper');
         const mangaBubble = document.getElementById('manga-bubble');
+        const mangaContainer = document.querySelector('.manga-container');
 
         // Panel de configuración
         const configToggleBtn = document.getElementById('config-toggle-btn');
@@ -1849,6 +2263,7 @@
         const waifuCards = document.querySelectorAll('.waifu-card');
         const waifuDescDisplay = document.getElementById('waifu-desc-display');
         const mangaTag = document.getElementById('manga-tag');
+        const bubbleStyleOptions = document.querySelectorAll('.bubble-style-option');
 
         // Cuenta y persistencia de sesión
         const authOverlay = document.getElementById('auth-overlay');
@@ -1865,6 +2280,15 @@
         const verificationFields = document.getElementById('verification-fields');
         const termsAccept = document.getElementById('terms-accept');
         const termsDialog = document.getElementById('terms-dialog');
+        const cookieBanner = document.getElementById('cookie-banner');
+        const cookieSettingsDialog = document.getElementById('cookie-preferences-dialog');
+        const cookieSettingsLink = document.getElementById('cookie-settings-link');
+        const cookieRememberLogin = document.getElementById('cookie-remember-login');
+        const cookieConsentKey = 'nino_cookie_consent';
+        const cookieConsentVersion = 2;
+        const cookieConsentMaxAge = 180 * 24 * 60 * 60 * 1000;
+        let cookieConsent = null;
+        let sessionLoadingStarted = false;
         const authError = document.getElementById('auth-error');
         const authSubtitle = document.getElementById('auth-subtitle');
         const authSubmitBtn = document.getElementById('auth-submit-btn');
@@ -1950,6 +2374,166 @@
         let authStep = 'credentials';
         let profile = null;
         let activeChatMode = 'conversacion';
+        let bubbleStyle = 'classic';
+        const bubbleViewport = window.matchMedia('(max-width: 768px)');
+        let latestAssistantText = ninoText.textContent;
+        let compactTranscriptLines = [];
+        let compactAnimationFrame = null;
+        let compactRenderedText = '';
+        let compactCharacterNodes = [];
+
+        function isCompactMobile() {
+            return bubbleStyle === 'compact' && window.matchMedia('(max-width: 768px)').matches;
+        }
+
+        function splitTranscriptLines(text) {
+            const maxCharacters = Math.max(30, Math.floor((window.innerWidth - 64) / 7.2));
+            const words = String(text || '').replace(/\s+/g, ' ').trim().split(' ');
+            const lines = [];
+            let line = '';
+
+            words.forEach(word => {
+                const next = line ? `${line} ${word}` : word;
+                if (line && next.length > maxCharacters) {
+                    lines.push(line);
+                    line = word;
+                } else {
+                    line = next;
+                }
+            });
+            if (line) lines.push(line);
+            return lines.length ? lines : ['...'];
+        }
+
+        function stopCompactTranscript() {
+            if (compactAnimationFrame) cancelAnimationFrame(compactAnimationFrame);
+            compactAnimationFrame = null;
+            ninoText.classList.remove('typing');
+        }
+
+        function resetCompactRenderer() {
+            compactRenderedText = '';
+            compactCharacterNodes = [];
+            ninoText.replaceChildren();
+        }
+
+        function renderCompactText(text, animateNewCharacters = true) {
+            const nextCharacters = Array.from(String(text || ''));
+            const currentCharacters = Array.from(compactRenderedText);
+            let sharedLength = 0;
+            while (sharedLength < currentCharacters.length && sharedLength < nextCharacters.length
+                && currentCharacters[sharedLength] === nextCharacters[sharedLength]) {
+                sharedLength += 1;
+            }
+
+            while (compactCharacterNodes.length > sharedLength) {
+                compactCharacterNodes.pop().remove();
+            }
+
+            for (let index = sharedLength; index < nextCharacters.length; index += 1) {
+                const character = nextCharacters[index];
+                const node = character === '\n' ? document.createElement('br') : document.createElement('span');
+                if (character !== '\n') {
+                    node.className = 'transcript-glyph';
+                    node.textContent = character;
+                    if (!animateNewCharacters) node.style.animation = 'none';
+                    else node.style.animationDelay = `${Math.min((index - sharedLength) * 0.009, 0.11)}s`;
+                }
+                ninoText.appendChild(node);
+                compactCharacterNodes.push(node);
+            }
+
+            compactRenderedText = nextCharacters.join('');
+        }
+
+        function showCompactTranscript(progress = 0, finished = false) {
+            if (!isCompactMobile() || !compactTranscriptLines.length) return;
+            const safeProgress = Math.max(0, Math.min(1, progress));
+            const visibleLineCount = Math.min(2, compactTranscriptLines.length);
+            const totalCharacters = compactTranscriptLines.reduce((total, line) => total + line.length + 1, 0);
+            const spokenCharacters = finished ? totalCharacters : Math.floor(totalCharacters * safeProgress);
+            let activeLine = 0;
+            let offsetInLine = spokenCharacters;
+
+            while (activeLine < compactTranscriptLines.length - 1 && offsetInLine > compactTranscriptLines[activeLine].length) {
+                offsetInLine -= compactTranscriptLines[activeLine].length + 1;
+                activeLine += 1;
+            }
+
+            // Antes de que empiece la voz, deja una vista estable con las primeras líneas completas.
+            if (!finished && safeProgress === 0) {
+                const preview = compactTranscriptLines.slice(0, visibleLineCount).join('\n');
+                if (preview !== compactRenderedText) {
+                    renderCompactText(preview, false);
+                }
+                return;
+            }
+
+            const currentLine = compactTranscriptLines[activeLine];
+            const typedCurrentLine = currentLine.slice(0, Math.min(currentLine.length, Math.max(0, offsetInLine)));
+            let visibleText;
+
+            if (finished) {
+                visibleText = compactTranscriptLines.slice(-2).join('\n');
+            } else if (activeLine === 0) {
+                visibleText = typedCurrentLine;
+            } else {
+                const previousLine = compactTranscriptLines[activeLine - 1];
+                const progressInActiveLine = currentLine.length ? typedCurrentLine.length / currentLine.length : 1;
+                if (progressInActiveLine < 0.5) {
+                    // Mantiene el par actual hasta que la segunda línea esté leída a la mitad.
+                    visibleText = `${previousLine}\n${typedCurrentLine}`;
+                } else {
+                    const nextLine = compactTranscriptLines[activeLine + 1];
+                    const nextProgress = Math.min(1, (progressInActiveLine - 0.5) * 2);
+                    const typedNextLine = nextLine ? nextLine.slice(0, Math.ceil(nextLine.length * nextProgress)) : '';
+                    visibleText = nextLine ? `${currentLine}\n${typedNextLine}` : currentLine;
+                }
+            }
+
+            if (visibleText !== compactRenderedText) renderCompactText(visibleText);
+        }
+
+        function animateCompactTranscript(audio) {
+            stopCompactTranscript();
+            if (!isCompactMobile()) return;
+            ninoText.classList.add('typing');
+            const render = () => {
+                if (currentAudio !== audio || audio.paused) return;
+                if (Number.isFinite(audio.duration) && audio.duration > 0) {
+                    showCompactTranscript(audio.currentTime / audio.duration);
+                }
+                compactAnimationFrame = requestAnimationFrame(render);
+            };
+            render();
+        }
+
+        function applyBubbleStyle(style) {
+            bubbleStyle = style === 'compact' ? 'compact' : 'classic';
+            mangaContainer.classList.toggle('bubble-compact', bubbleStyle === 'compact');
+            document.documentElement.dataset.bubbleStyle = bubbleStyle;
+            try {
+                localStorage.setItem(bubbleViewport.matches ? 'nino-bubble-style-mobile' : 'nino-bubble-style-desktop', bubbleStyle);
+                if (!bubbleViewport.matches) localStorage.setItem('nino-bubble-style', bubbleStyle);
+            } catch (_) { /* almacenamiento no disponible */ }
+
+            bubbleStyleOptions.forEach(option => {
+                const selected = option.dataset.bubbleStyle === bubbleStyle;
+                option.classList.toggle('active', selected);
+                option.setAttribute('aria-pressed', String(selected));
+            });
+
+            compactTranscriptLines = splitTranscriptLines(latestAssistantText);
+            if (isCompactMobile()) {
+                resetCompactRenderer();
+                showCompactTranscript(currentAudio && !currentAudio.paused && Number.isFinite(currentAudio.duration) && currentAudio.duration > 0 ? currentAudio.currentTime / currentAudio.duration : 0);
+            } else {
+                stopCompactTranscript();
+                compactCharacterNodes = [];
+                compactRenderedText = '';
+                ninoText.textContent = latestAssistantText;
+            }
+        }
 
         const waifuDetails = {
             nino: {
@@ -1968,12 +2552,107 @@
             }
         };
 
+        function savedBubbleStyleForViewport() {
+            try {
+                const saved = localStorage.getItem(bubbleViewport.matches ? 'nino-bubble-style-mobile' : 'nino-bubble-style-desktop')
+                    || (!bubbleViewport.matches ? localStorage.getItem('nino-bubble-style') : null);
+                if (saved === 'classic' || saved === 'compact') return saved;
+            } catch (_) { /* se usa el valor predeterminado */ }
+            return bubbleViewport.matches ? 'compact' : 'classic';
+        }
+        bubbleStyle = savedBubbleStyleForViewport();
+        applyBubbleStyle(bubbleStyle);
+
+        bubbleStyleOptions.forEach(option => {
+            option.addEventListener('click', () => applyBubbleStyle(option.dataset.bubbleStyle));
+        });
+        let previousBubbleViewport = bubbleViewport.matches;
+        window.addEventListener('resize', () => {
+            if (previousBubbleViewport !== bubbleViewport.matches) {
+                previousBubbleViewport = bubbleViewport.matches;
+                applyBubbleStyle(savedBubbleStyleForViewport());
+            }
+            compactTranscriptLines = splitTranscriptLines(latestAssistantText);
+            if (isCompactMobile()) {
+                resetCompactRenderer();
+                showCompactTranscript(currentAudio && !currentAudio.paused && Number.isFinite(currentAudio.duration) && currentAudio.duration > 0 ? currentAudio.currentTime / currentAudio.duration : 0);
+            }
+        });
+
         async function apiFetch(url, options = {}) {
-            const res = await fetch(url, options);
+            const res = await fetch(url, { credentials: 'same-origin', ...options });
             let data = {};
             try { data = await res.json(); } catch (_) { data = { status: 'error', message: 'Respuesta inválida del servidor.' }; }
             return { res, data };
         }
+
+        function readCookieConsent() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(cookieConsentKey) || 'null');
+                const savedAt = Date.parse(saved?.savedAt || '');
+                if (saved && saved.version === cookieConsentVersion && typeof saved.rememberLogin === 'boolean' && Number.isFinite(savedAt) && savedAt <= Date.now() && Date.now() - savedAt < cookieConsentMaxAge) return saved;
+            } catch (_) { /* el navegador puede bloquear el almacenamiento local */ }
+            return null;
+        }
+
+        async function syncSessionPreference() {
+            if (!profile) return;
+            try {
+                await apiFetch('/api/session-preference', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ remember_session: cookieConsent?.rememberLogin === true })
+                });
+            } catch (_) { /* la sesión actual sigue funcionando si falla la actualización */ }
+        }
+
+        function saveCookieConsent(rememberLogin) {
+            cookieConsent = {
+                version: cookieConsentVersion,
+                rememberLogin: Boolean(rememberLogin),
+                savedAt: new Date().toISOString()
+            };
+            try { localStorage.setItem(cookieConsentKey, JSON.stringify(cookieConsent)); } catch (_) { /* funciona en esta visita aunque el navegador no guarde preferencias */ }
+            cookieBanner.hidden = true;
+            cookieBanner.classList.remove('visible');
+            cookieSettingsLink.classList.add('visible');
+            cookieSettingsDialog.hidden = true;
+            cookieSettingsDialog.classList.remove('visible');
+            if (profile) syncSessionPreference();
+            else if (!sessionLoadingStarted) {
+                sessionLoadingStarted = true;
+                loadSession();
+            }
+        }
+
+        function openCookieSettings() {
+            cookieRememberLogin.checked = cookieConsent?.rememberLogin === true;
+            cookieSettingsDialog.hidden = false;
+            cookieSettingsDialog.classList.add('visible');
+        }
+
+        function initializeCookiePreferences() {
+            cookieConsent = readCookieConsent();
+            if (cookieConsent) {
+                cookieSettingsLink.classList.add('visible');
+            } else {
+                cookieBanner.hidden = false;
+                requestAnimationFrame(() => cookieBanner.classList.add('visible'));
+            }
+            document.getElementById('cookie-accept').addEventListener('click', () => saveCookieConsent(true));
+            document.getElementById('cookie-reject').addEventListener('click', () => saveCookieConsent(false));
+            document.getElementById('cookie-configure').addEventListener('click', openCookieSettings);
+            document.getElementById('cookie-settings-link').addEventListener('click', openCookieSettings);
+            document.getElementById('cookie-save-preferences').addEventListener('click', () => saveCookieConsent(cookieRememberLogin.checked));
+            document.getElementById('cookie-reject-from-settings').addEventListener('click', () => saveCookieConsent(false));
+            document.getElementById('cookie-preferences-close').addEventListener('click', () => {
+                cookieSettingsDialog.hidden = true;
+                cookieSettingsDialog.classList.remove('visible');
+            });
+            document.getElementById('cookie-open-policy').addEventListener('click', () => termsDialog.classList.add('visible'));
+            document.getElementById('legal-info-link').addEventListener('click', () => termsDialog.classList.add('visible'));
+        }
+
+        initializeCookiePreferences();
 
         const profileChoiceRefreshers = [];
         function setupProfileChoice(select) {
@@ -2106,6 +2785,9 @@
 
         function showAuth() {
             profile = null;
+            window.__ninoSessionAuthenticated = false;
+            document.body.classList.remove('avatar-authenticated');
+            if (window.setAvatarAuthenticated) window.setAvatarAuthenticated(false);
             profilePanel.classList.remove('open');
             profileToggleBtn.style.display = 'none';
             authOverlay.classList.add('visible');
@@ -2114,6 +2796,9 @@
         }
 
         function hideAuth() {
+            window.__ninoSessionAuthenticated = true;
+            if (window.setAvatarAuthenticated) window.setAvatarAuthenticated(true);
+            else document.body.classList.remove('avatar-authenticated');
             authOverlay.classList.remove('visible');
             authOverlay.setAttribute('aria-hidden', 'true');
             profileToggleBtn.style.display = '';
@@ -2154,6 +2839,7 @@
                 if (res.ok && data.status === 'ok') {
                     fillProfile(data.profile);
                     hideAuth();
+                    await syncSessionPreference();
                 } else {
                     showAuth();
                 }
@@ -2211,8 +2897,8 @@
                 if (authStep === 'credentials' && !termsAccept.checked) throw new Error('Debes aceptar los términos y condiciones para continuar.');
                 const endpoint = authStep === 'verify' ? '/api/verify-email' : `/api/${authMode}`;
                 const payload = authStep === 'verify'
-                    ? { email: authEmail.value.trim(), code: authCode.value.trim() }
-                    : { username: authUsername.value.trim(), password: authPassword.value, terms_version: '2026-10-05', ...(authMode === 'register' ? { email: authEmail.value.trim() } : {}) };
+                    ? { email: authEmail.value.trim(), code: authCode.value.trim(), remember_session: cookieConsent?.rememberLogin === true }
+                    : { username: authUsername.value.trim(), password: authPassword.value, terms_version: '2026-10-10', remember_session: cookieConsent?.rememberLogin === true, ...(authMode === 'register' ? { email: authEmail.value.trim() } : {}) };
                 const { res, data } = await apiFetch(endpoint, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -2247,6 +2933,7 @@
                 if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo iniciar la sesión.');
                 fillProfile(data.profile);
                 hideAuth();
+                await syncSessionPreference();
             } catch (error) {
                 authError.textContent = error.message || 'No se pudo conectar con el servidor.';
             } finally {
@@ -2300,7 +2987,12 @@
         if (window.location.hash.includes('access_token')) {
             history.replaceState(null, '', window.location.pathname + window.location.search);
         }
-        loadSession();
+        if (cookieConsent) {
+            sessionLoadingStarted = true;
+            loadSession();
+        } else {
+            showAuth();
+        }
 
         function openConfigPanel() {
             configPanel.classList.add('open');
@@ -2368,7 +3060,27 @@
         }
 
         function setNinoMessage(msg) {
-            ninoText.innerHTML = msg;
+            stopCompactTranscript();
+            latestAssistantText = String(msg || '');
+            compactTranscriptLines = splitTranscriptLines(latestAssistantText);
+            if (isCompactMobile()) {
+                resetCompactRenderer();
+                showCompactTranscript(0);
+            } else {
+                compactCharacterNodes = [];
+                compactRenderedText = '';
+                ninoText.textContent = latestAssistantText;
+            }
+            triggerBubblePop();
+        }
+
+        function showThinkingMessage() {
+            stopCompactTranscript();
+            latestAssistantText = '';
+            compactTranscriptLines = [];
+            compactRenderedText = '';
+            compactCharacterNodes = [];
+            ninoText.innerHTML = '<span class="dots-loading" aria-label="Pensando...">Pensando<span class="thinking-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></span>';
             triggerBubblePop();
         }
 
@@ -2390,20 +3102,40 @@
             currentAudio = audio;
 
             audio.onplay = () => {
+                if (window.setNinoSpeechAudio) window.setNinoSpeechAudio(audio);
                 if (window.setNinoSpeaking) window.setNinoSpeaking(true);
+                animateCompactTranscript(audio);
+            };
+            audio.onloadedmetadata = () => {
+                if (currentAudio === audio && !audio.paused && Number.isFinite(audio.duration) && audio.duration > 0) {
+                    showCompactTranscript(audio.currentTime / audio.duration);
+                }
+            };
+            audio.ontimeupdate = () => {
+                if (currentAudio === audio && !audio.paused && Number.isFinite(audio.duration) && audio.duration > 0) {
+                    showCompactTranscript(audio.currentTime / audio.duration);
+                }
             };
             audio.onended = () => {
+                if (currentAudio !== audio) return;
                 if (window.setNinoSpeaking) window.setNinoSpeaking(false);
+                stopCompactTranscript();
+                showCompactTranscript(1, true);
                 currentAudio = null;
             };
             audio.onerror = () => {
+                if (currentAudio !== audio) return;
                 if (window.setNinoSpeaking) window.setNinoSpeaking(false);
+                stopCompactTranscript();
+                if (isCompactMobile()) showCompactTranscript(0);
                 currentAudio = null;
             };
 
             audio.play().catch(() => {
                 // Autoplay bloqueado por el navegador (requiere interacción previa del usuario)
                 if (window.setNinoSpeaking) window.setNinoSpeaking(false);
+                stopCompactTranscript();
+                if (isCompactMobile()) showCompactTranscript(0);
             });
         }
 
@@ -2450,7 +3182,7 @@
 
             // Activar estado "escuchando/procesando" en el avatar
             if (window.setNinoListening) window.setNinoListening(true);
-            setNinoMessage('<span class="dots-loading">Pensando<span>.</span><span>.</span><span>.</span></span>');
+            showThinkingMessage();
 
             try {
                 const res = await fetch('/api/chat', {
