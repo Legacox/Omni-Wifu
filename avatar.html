@@ -1176,280 +1176,1032 @@
             miku: { file: 'hatsune_miku.vrm', frontRotation: 0 }
         };
 
-        // ══════════════════════════════════════════════════════════════
-        //  WALK ENTRANCE — Entrada natural como una persona real
-        //  El personaje entra de lado (mirando en la dirección de marcha),
-        //  gira suavemente mientras camina y queda de frente al llegar.
-        // ══════════════════════════════════════════════════════════════
-        const walkEntrance = {
-            active: false,
-            progress: 0,
-            // Nino entra rápido y segura; Miku un poco más suave
-            duration: 2.6,
-            startX: 2.4,
-            targetX: 0,
-            targetZ: 0,
-            // La marcha ocupa el 75 % del tiempo; el 25 % restante es asentamiento
-            walkPortion: 0.75,
-            frontRotation: Math.PI,
-            // entryRotation se calcula al iniciar según el lado de entrada
-            entryRotation: Math.PI * 1.5,
-            bounceActive: false,
-            bounceProgress: 0,
-            waifuName: 'nino',
+        //#CORE_BEGIN
+        // ══════════════════════════════════════════════════════════════════════
+        //  NÚCLEO DE ANIMACIÓN (sin DOM)
+        //  - Rig: ejes del personaje (adelante / arriba / izquierda) deducidos de
+        //    la geometría del esqueleto → funciona igual en VRM 0.x y 1.0.
+        //  - Brazos por IK de dos huesos: los gestos se definen como "dónde está la
+        //    mano" y hacia dónde mira la palma, no como ángulos sueltos por eje.
+        //  - Marcha por distancia recorrida (sin patinar), con trayectoria curva.
+        //  - Personalidad (Nino / Miku) + actitud por frase (cálida, curiosa, etc.)
+        // ══════════════════════════════════════════════════════════════════════
+        const clamp = THREE.MathUtils.clamp;
+        const clamp01 = (x) => Math.min(1, Math.max(0, x));
+        const smooth01 = (x) => { x = clamp01(x); return x * x * (3 - 2 * x); };
+        const damp = (cur, target, lambda, dt) => cur + (target - cur) * (1 - Math.exp(-lambda * dt));
+        const dampAngle = (cur, target, lambda, dt) => {
+            const TAU = Math.PI * 2;
+            const d = ((target - cur + Math.PI) % TAU + TAU) % TAU - Math.PI;
+            return cur + d * (1 - Math.exp(-lambda * dt));
+        };
+        const rand = (a, b) => a + Math.random() * (b - a);
+        const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+        const V3 = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
-            update(vrm, delta) {
-                if (!this.active || !vrm) return false;
-                const isNino = this.waifuName === 'nino';
-                const isMiku = this.waifuName === 'miku';
+        const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion();
+        const _qd = new THREE.Quaternion();
+        const _va = V3(), _vb = V3(), _vc = V3(), _vd = V3(), _ve = V3(), _vf = V3(), _vg = V3();
 
-                this.progress = Math.min(1, this.progress + delta / this.duration);
-                const walkProgress = Math.min(1, this.progress / this.walkPortion);
+        const BONE_NAMES = ['hips', 'spine', 'chest', 'upperChest', 'neck', 'head',
+            'leftShoulder', 'rightShoulder', 'leftUpperArm', 'rightUpperArm', 'leftLowerArm', 'rightLowerArm',
+            'leftHand', 'rightHand', 'leftUpperLeg', 'rightUpperLeg', 'leftLowerLeg', 'rightLowerLeg',
+            'leftFoot', 'rightFoot'];
+        const FINGER_NAMES = ['Index', 'Middle', 'Ring', 'Little'];
+        // Curvatura máxima (rad) de cada falange con curl = 1
+        const FINGER_CURL = { Proximal: 1.15, Intermediate: 1.4, Distal: 0.75 };
+        const FINGER_BIAS = { Index: 0.8, Middle: 1.0, Ring: 1.08, Little: 1.18 };
 
-                // Easing de posición: Nino más brusca al frenar, Miku más orgánica
-                const eased = isNino
-                    ? 1 - Math.pow(1 - walkProgress, 2.4)
-                    : 1 - Math.pow(1 - walkProgress, 3.0);
+        // ── Especificación de pose de brazo ──────────────────────────────────
+        //  t    : posición de la muñeca respecto al hombro, en longitudes de brazo
+        //         [fuera, arriba, delante]
+        //  pole : hacia dónde apunta el codo [fuera, arriba, delante]
+        //  palm : hacia dónde mira la palma [fuera, arriba, delante]
+        //  curl : cierre de los dedos 0..1;  wrist: flexión de muñeca (+ hacia la palma)
+        const P = (t, pole, palm, curl = 0.35, wrist = 0) => ({ t: t.slice(), pole: pole.slice(), palm: palm.slice(), curl, wrist });
+        const cloneSpec = (s) => P(s.t, s.pole, s.palm, s.curl, s.wrist);
 
-                let posX = THREE.MathUtils.lerp(this.startX, this.targetX, eased);
-                // Miku: pequeño overshoot y retorno
-                if (isMiku && walkProgress > 0.88) {
-                    posX -= Math.sin((walkProgress - 0.88) / 0.12 * Math.PI) * 0.04;
+        class ArmCtl {
+            constructor(spec) {
+                this.goal = cloneSpec(spec);
+                this.mid = cloneSpec(spec);
+                this.cur = cloneSpec(spec);
+                this.lam = 4;
+            }
+            setGoal(spec, lam = 4) { this.goal = spec; this.lam = lam; }
+            step(dt) {
+                const g = this.goal, m = this.mid, c = this.cur;
+                const l1 = this.lam, l2 = this.lam * 1.7;
+                for (const k of ['t', 'pole', 'palm']) {
+                    for (let i = 0; i < 3; i++) {
+                        m[k][i] = damp(m[k][i], g[k][i], l1, dt);
+                        c[k][i] = damp(c[k][i], m[k][i], l2, dt);
+                    }
+                }
+                for (const k of ['curl', 'wrist']) {
+                    m[k] = damp(m[k], g[k], l1, dt);
+                    c[k] = damp(c[k], m[k], l2, dt);
+                }
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  RIG
+        // ══════════════════════════════════════════════════════════════════════
+        class Rig {
+            constructor(vrm) {
+                this.vrm = vrm;
+                const h = vrm.humanoid;
+                this.b = {};
+                for (const n of BONE_NAMES) this.b[n] = h.getNormalizedBoneNode(n) || null;
+                this.fingers = { left: [], right: [] };
+                for (const side of ['left', 'right']) {
+                    for (const f of FINGER_NAMES) {
+                        for (const j of ['Proximal', 'Intermediate', 'Distal']) {
+                            const bone = h.getNormalizedBoneNode(side + f + j);
+                            if (bone) this.fingers[side].push({ bone, f, j });
+                        }
+                    }
                 }
 
-                // El giro arranca tarde (cuando ya lleva medio camino andado)
-                // y termina antes de que el personaje se detenga: así la
-                // rotación sucede durante la marcha, no estático en el sitio.
-                const turnStart = 0.35;
-                const turnEnd   = 0.82;
-                const rawTurn   = THREE.MathUtils.clamp((walkProgress - turnStart) / (turnEnd - turnStart), 0, 1);
-                // Smoothstep para que el giro sea continuo y sin tirones
-                const turnEased = rawTurn * rawTurn * (3 - 2 * rawTurn);
-                vrm.scene.rotation.y = THREE.MathUtils.lerp(this.entryRotation, this.frontRotation, turnEased);
+                // Los huesos normalizados tienen rotación de reposo = identidad y sus ejes
+                // alineados con la T-pose. Lo único que cambia entre VRM0 y VRM1 es hacia
+                // dónde mira el personaje: lo deducimos de dónde está su brazo izquierdo.
+                let sx = this.b.leftLowerArm ? Math.sign(this.b.leftLowerArm.position.x) : 0;
+                if (!sx) sx = vrm._isVRM1 ? 1 : -1;
+                this.Lft = V3(sx, 0, 0);
+                this.U = V3(0, 1, 0);
+                this.F = V3().crossVectors(this.Lft, this.U).normalize();
+                // rotation.y de la escena que deja al personaje mirando a +Z (hacia la cámara)
+                this.frontYaw = -Math.atan2(this.F.x, this.F.z);
 
-                // Zancada: fade in al principio y fade out al llegar
-                const stepsPerCycle = isMiku ? 6.5 : 5.5;
-                const phase  = walkProgress * Math.PI * stepsPerCycle;
-                const stride = Math.sin(phase) * Math.sin(Math.PI * walkProgress);
+                this.aLean = V3().crossVectors(this.U, this.F).normalize();   // +ángulo = inclinar hacia delante
+                this.aTilt = V3().crossVectors(this.U, this.Lft).normalize(); // +ángulo = inclinar hacia la izquierda
 
-                vrm.scene.position.x = posX;
-                // Ligera curva de profundidad — evita desplazamiento puramente lateral
-                vrm.scene.position.z = this.targetZ - Math.sin(walkProgress * Math.PI) * (isMiku ? 0.14 : 0.10);
-                // Bobbing vertical suave
-                vrm.scene.position.y = Math.abs(stride) * (isMiku ? 0.026 : 0.015);
+                // posiciones de reposo (suma de offsets: todas las rotaciones de reposo son identidad)
+                const restPos = (bone) => {
+                    const p = V3();
+                    let n = bone;
+                    while (n && n !== vrm.scene) { p.add(n.position); n = n.parent; }
+                    return p;
+                };
+                this.pos = {};
+                for (const n of BONE_NAMES) if (this.b[n]) this.pos[n] = restPos(this.b[n]);
+                this.hipsRest = this.b.hips ? this.b.hips.position.clone() : V3();
 
-                const humanoid = vrm.humanoid;
-                const sign = vrm._isVRM1 ? -1 : 1;
-                if (humanoid) {
-                    const leftUpperArm  = humanoid.getNormalizedBoneNode('leftUpperArm');
-                    const rightUpperArm = humanoid.getNormalizedBoneNode('rightUpperArm');
-                    const leftUpperLeg  = humanoid.getNormalizedBoneNode('leftUpperLeg');
-                    const rightUpperLeg = humanoid.getNormalizedBoneNode('rightUpperLeg');
-                    const leftLowerLeg  = humanoid.getNormalizedBoneNode('leftLowerLeg');
-                    const rightLowerLeg = humanoid.getNormalizedBoneNode('rightLowerLeg');
+                const headY = this.pos.head ? this.pos.head.y : 1.4;
+                this.unit = clamp(headY / 1.38, 0.55, 1.6);
+                this.shoulderHalf = (this.pos.leftUpperArm && this.pos.rightUpperArm)
+                    ? this.pos.leftUpperArm.distanceTo(this.pos.rightUpperArm) / 2 : 0.18 * this.unit;
 
-                    const armSwing  = isMiku ? 0.38 : 0.26;
-                    const legSwing  = isMiku ? 0.44 : 0.34;
-                    const kneeSwing = isMiku ? 0.55 : 0.42;
-
-                    // Brazos caídos con balanceo natural de marcha
-                    if (leftUpperArm)  { leftUpperArm.rotation.z  =  sign * 1.38; leftUpperArm.rotation.x  = -stride * armSwing; }
-                    if (rightUpperArm) { rightUpperArm.rotation.z = -sign * 1.38; rightUpperArm.rotation.x =  stride * armSwing; }
-                    if (leftUpperLeg)  leftUpperLeg.rotation.x  =  stride * legSwing;
-                    if (rightUpperLeg) rightUpperLeg.rotation.x = -stride * legSwing;
-                    if (leftLowerLeg)  leftLowerLeg.rotation.x  = Math.max(0, -stride) * kneeSwing;
-                    if (rightLowerLeg) rightLowerLeg.rotation.x = Math.max(0,  stride) * kneeSwing;
+                this.arm = {};
+                for (const side of ['left', 'right']) {
+                    const ua = this.b[side + 'UpperArm'], la = this.b[side + 'LowerArm'], hd = this.b[side + 'Hand'];
+                    if (!ua || !la || !hd) continue;
+                    const sd = Math.sign(hd.position.x) || (side === 'left' ? sx : -sx);
+                    this.arm[side] = {
+                        ua, la, hd,
+                        l1: la.position.length(), l2: hd.position.length(),
+                        L: la.position.length() + hd.position.length(),
+                        t1: la.position.clone().normalize(),
+                        t2: hd.position.clone().normalize(),
+                        out: side === 'left' ? this.Lft.clone() : this.Lft.clone().negate(),
+                        curlAxis: V3(0, 0, -sd)      // curva dedos/muñeca hacia la palma (T-pose: palma abajo)
+                    };
                 }
+                // piernas
+                const ll = this.b.leftLowerLeg, lf = this.b.leftFoot;
+                this.legL1 = ll ? ll.position.length() : 0.4;
+                this.legL2 = lf ? lf.position.length() : 0.4;
+                this.hasLegs = !!(this.b.leftUpperLeg && this.b.rightUpperLeg && ll && lf);
 
-                if (this.progress >= 1) {
-                    vrm.scene.position.set(this.targetX, 0, this.targetZ);
-                    vrm.scene.rotation.y = this.frontRotation;
-                    this.active = false;
-                    if (isMiku) { this.bounceActive = true; this.bounceProgress = 0; }
+                this.buildKeyPoints();
+            }
+
+            // Puntos del cuerpo (en el espacio del esqueleto) para colocar manos
+            buildKeyPoints() {
+                const p = this.pos, U = this.U, F = this.F, u = this.unit;
+                const c = V3();
+                if (p.leftUpperArm && p.rightUpperArm) c.copy(p.leftUpperArm).add(p.rightUpperArm).multiplyScalar(0.5);
+                const head = p.head || V3(0, 1.4, 0);
+                const at = (base, up, fwd, side, lat) => {
+                    const v = base.clone();
+                    v.addScaledVector(U, up * u).addScaledVector(F, fwd * u);
+                    if (side) v.addScaledVector(side, lat * u);
+                    return v;
+                };
+                const midAt = (bone) => V3(c.x, (p[bone] ? p[bone].y : c.y), c.z);
+                this.kp = {
+                    chest: at(midAt('chest'), 0, 0.085),
+                    belly: at(midAt('spine'), 0.02, 0.095),
+                    chin: at(V3(c.x, head.y, c.z), 0.012, 0.105),
+                    mouth: at(V3(c.x, head.y, c.z), 0.05, 0.11),
+                    earL: at(V3(c.x, head.y, c.z), 0.085, 0, this.Lft, 0.078),
+                    earR: at(V3(c.x, head.y, c.z), 0.085, 0, this.Lft, -0.078)
+                };
+            }
+
+            // Punto del cuerpo + desplazamiento (m·unit) → coordenadas [fuera, arriba, delante]/L respecto al hombro
+            armUnits(side, point, offO = 0, offU = 0, offF = 0) {
+                const A = this.arm[side];
+                const S = this.pos[side + 'UpperArm'];
+                _vd.copy(point).sub(S);
+                const u = this.unit;
+                return [
+                    (_vd.dot(A.out) + offO * u) / A.L,
+                    (_vd.dot(this.U) + offU * u) / A.L,
+                    (_vd.dot(this.F) + offF * u) / A.L
+                ];
+            }
+
+            // Evita que la muñeca atraviese el torso
+            avoidTorso(A, o, u, f) {
+                const L = A.L, un = this.unit;
+                const lat = this.shoulderHalf + o * L;
+                const h = u * L;
+                if (Math.abs(lat) < 0.19 * un && h < 0.03 * un && h > -0.62 * un) {
+                    const front = 0.14 * un;
+                    if (f * L < front) f = front / L;
                 }
-                return true;
+                return [o, u, f];
+            }
+
+            // IK de dos huesos en el sistema del hombro → rotaciones locales de brazo, antebrazo, mano y dedos
+            solveArm(side, spec, extra) {
+                const A = this.arm[side];
+                if (!A) return;
+                const U = this.U, F = this.F;
+                let to = spec.t[0], tu = spec.t[1], tf = spec.t[2];
+                let reachMax = 0.985;
+                if (extra) {
+                    if (extra.swing) {   // balanceo adelante/atrás de la mano (marcha)
+                        const c = Math.cos(extra.swing), s = Math.sin(extra.swing);
+                        const u2 = tu * c + tf * s, f2 = tf * c - tu * s;
+                        tu = u2; tf = f2;
+                    }
+                    to += extra.o || 0; tu += extra.u || 0; tf += extra.f || 0;
+                    if (extra.reach) reachMax = extra.reach;
+                }
+                [to, tu, tf] = this.avoidTorso(A, to, tu, tf);
+                const L = A.L;
+                const tgt = _va.set(0, 0, 0).addScaledVector(A.out, to * L).addScaledVector(U, tu * L).addScaledVector(F, tf * L);
+                const d = Math.max(1e-4, tgt.length());
+                const dc = clamp(d, 0.25 * L, reachMax * L);
+                const dirT = tgt.multiplyScalar(1 / d);           // (_va)
+
+                // Codo: ley de cosenos + vector polo
+                const cosA = clamp((A.l1 * A.l1 + dc * dc - A.l2 * A.l2) / (2 * A.l1 * dc), -1, 1);
+                const sinA = Math.sqrt(1 - cosA * cosA);
+                const pole = _vb.set(0, 0, 0).addScaledVector(A.out, spec.pole[0]).addScaledVector(U, spec.pole[1]).addScaledVector(F, spec.pole[2]);
+                pole.addScaledVector(dirT, -pole.dot(dirT));
+                if (pole.lengthSq() < 1e-6) pole.copy(A.out).addScaledVector(dirT, -A.out.dot(dirT));
+                pole.normalize();
+                const E = _vc.copy(dirT).multiplyScalar(A.l1 * cosA).addScaledVector(pole, A.l1 * sinA);   // codo
+
+                // Brazo
+                const u = _vd.copy(E).normalize();
+                const qUA = _qa.setFromUnitVectors(A.t1, u);
+                A.ua.quaternion.copy(qUA);
+
+                // Antebrazo
+                const T = _ve.copy(dirT).multiplyScalar(dc);
+                const f = _vf.copy(T).sub(E).normalize();
+                const floc = _va.copy(f).applyQuaternion(_qb.copy(qUA).invert());
+                const aim = _qc.setFromUnitVectors(A.t2, floc);
+
+                // Roll del antebrazo para orientar la palma (analítico)
+                const n0 = _vb.set(0, -1, 0).applyQuaternion(aim).applyQuaternion(qUA);
+                const w = _vd.set(0, 0, 0).addScaledVector(A.out, spec.palm[0]).addScaledVector(U, spec.palm[1]).addScaledVector(F, spec.palm[2]);
+                n0.addScaledVector(f, -n0.dot(f));
+                w.addScaledVector(f, -w.dot(f));
+                let roll = 0;
+                if (n0.lengthSq() > 1e-6 && w.lengthSq() > 1e-6) {
+                    n0.normalize(); w.normalize();
+                    const cr = _vg.crossVectors(n0, w);
+                    roll = Math.atan2(f.dot(cr), n0.dot(w));
+                }
+                _qd.setFromAxisAngle(A.t2, roll);
+                A.la.quaternion.copy(aim).multiply(_qd);
+
+                // Muñeca
+                A.hd.quaternion.setFromAxisAngle(A.curlAxis, spec.wrist);
+
+                // Dedos
+                const cv = clamp01(spec.curl);
+                for (const fg of this.fingers[side]) {
+                    const ang = cv * FINGER_CURL[fg.j] * FINGER_BIAS[fg.f];
+                    fg.bone.quaternion.setFromAxisAngle(A.curlAxis, ang);
+                }
+            }
+
+            // Espina / cuello / cabeza: inclinación adelante (+), giro a la izquierda (+), ladeo a la izquierda (+)
+            setPosture(name, lean, yaw, tilt) {
+                const b = this.b[name];
+                if (!b) return;
+                _qa.setFromAxisAngle(this.U, yaw);
+                _qb.setFromAxisAngle(this.aTilt, tilt);
+                _qc.setFromAxisAngle(this.aLean, lean);
+                b.quaternion.copy(_qa).multiply(_qb).multiply(_qc);
+            }
+
+            // Pierna: cadera (+adelante), rodilla (+flexión), pie (compensación de suelo) → altura necesaria de la pelvis
+            setLeg(side, hip, knee, footExtra = 0, abd = 0) {
+                const ul = this.b[side + 'UpperLeg'], ll = this.b[side + 'LowerLeg'], ft = this.b[side + 'Foot'];
+                if (!ul || !ll || !ft) return 0;
+                _qa.setFromAxisAngle(this.aLean, -hip);
+                _qb.setFromAxisAngle(this.F, side === 'left' ? abd : -abd);
+                ul.quaternion.copy(_qb).multiply(_qa);
+                ll.quaternion.setFromAxisAngle(this.aLean, knee);
+                ft.quaternion.setFromAxisAngle(this.aLean, hip - knee + footExtra);
+                return this.legL1 * Math.cos(hip) + this.legL2 * Math.cos(hip - knee);
+            }
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  PERSONALIDADES
+        // ══════════════════════════════════════════════════════════════════════
+        const PERSONA = {
+            nino: {
+                // Tsundere contenida: erguida, mentón alto, gestos cortos y precisos
+                hangBeta: 0.16, ready: [0.12, -0.60, 0.40],
+                walkSpeed: 1.0, stepLen: 0.46, armSwing: 0.30, hipSway: 0.9, bounce: 0,
+                postureLean: -0.012, headLean: -0.045, headTilt: 0.0,
+                gestureScale: 0.85, gestureGap: [0.8, 2.0], unitLen: [2.0, 3.2], twoHand: 0.12, beat: 0.8, nod: 0.7,
+                headLambda: 5.5, armLambda: 4.2, breathPeriod: 4.4, breathAmp: 0.020,
+                baseHappy: 0.05, maxHappy: 0.20, eyeContact: 0.70, blinkMean: 3.6, syllRate: 4.8, mouthMax: 0.95,
+                dom: 'right',
+                idle: ['hairTouch', 'armsCross', 'lookAround', 'sigh', 'fidget'],
+                arrival: 'hairTouch'
             },
+            miku: {
+                // Idol alegre: gestos amplios y rítmicos, cabeza inclinada, se mueve con la música
+                hangBeta: 0.20, ready: [0.20, -0.52, 0.44],
+                walkSpeed: 1.12, stepLen: 0.50, armSwing: 0.48, hipSway: 1.3, bounce: 0.010,
+                postureLean: 0.01, headLean: 0.015, headTilt: 0.03,
+                gestureScale: 1.15, gestureGap: [0.3, 1.1], unitLen: [1.7, 2.8], twoHand: 0.55, beat: 1.25, nod: 1.1,
+                headLambda: 7.0, armLambda: 5.0, breathPeriod: 3.6, breathAmp: 0.026,
+                baseHappy: 0.14, maxHappy: 0.28, eyeContact: 0.82, blinkMean: 2.9, syllRate: 5.6, mouthMax: 1.0,
+                dom: 'right',
+                idle: ['sway', 'hairTouch', 'lookAround', 'clasp', 'sigh'],
+                arrival: 'wave'
+            }
+        };
 
-            updateBounce(vrm, delta) {
-                if (!this.bounceActive || !vrm) return;
-                this.bounceProgress += delta;
-                const t = this.bounceProgress / 0.55;
-                if (t >= 1) { this.bounceActive = false; vrm.scene.position.y = 0; return; }
-                const bounce = Math.sin(t * Math.PI * 2.0) * (1 - t) * 0.055;
-                vrm.scene.position.y = Math.max(0, bounce);
-            },
+        // Efecto de la actitud (por frase) sobre postura y cara
+        const ATTITUDE = {
+            neutral:  { amp: 1.0, beat: 1.0, lean: 0.00, tilt: 0.00, yaw: 0, happy: 0.00, relaxed: 0, angry: 0, blush: 0, away: 1.0,
+                        g: { nino: ['explain', 'list', 'open'], miku: ['explain', 'open', 'list'] } },
+            explain:  { amp: 1.0, beat: 1.1, lean: 0.02, tilt: 0.01, yaw: 0, happy: 0.00, relaxed: 0, angry: 0, blush: 0, away: 0.8,
+                        g: { nino: ['explain', 'list'], miku: ['explain', 'list', 'open'] } },
+            warm:     { amp: 1.05, beat: 0.9, lean: 0.02, tilt: 0.07, yaw: 0, happy: 0.10, relaxed: 0.05, angry: 0, blush: 0.22, away: 1.6,
+                        g: { nino: ['chest', 'open', 'shy'], miku: ['open', 'chest', 'cheer'] } },
+            reflect:  { amp: 0.85, beat: 0.6, lean: 0.015, tilt: 0.08, yaw: 0, happy: 0.00, relaxed: 0.06, angry: 0, blush: 0, away: 2.0,
+                        g: { nino: ['chin', 'explain'], miku: ['chin', 'chest'] } },
+            curious:  { amp: 1.0, beat: 0.9, lean: 0.03, tilt: 0.11, yaw: 0, happy: 0.03, relaxed: 0, angry: 0, blush: 0, away: 1.1,
+                        g: { nino: ['open', 'explain'], miku: ['open', 'chin', 'explain'] } },
+            emphatic: { amp: 1.25, beat: 1.7, lean: 0.03, tilt: 0.00, yaw: 0, happy: 0.05, relaxed: 0, angry: 0.03, blush: 0, away: 0.5,
+                        g: { nino: ['emphatic', 'cross'], miku: ['emphatic', 'cheer', 'open'] } },
+            shy:      { amp: 0.75, beat: 0.5, lean: -0.01, tilt: 0.06, yaw: 0, happy: 0.04, relaxed: 0.04, angry: 0, blush: 0.30, away: 2.6,
+                        g: { nino: ['shy', 'hair'], miku: ['shy', 'chest'] } },
+            tsun:     { amp: 1.0, beat: 1.2, lean: -0.02, tilt: -0.03, yaw: 0.22, happy: 0.00, relaxed: 0, angry: 0.06, blush: 0.15, away: 1.4,
+                        g: { nino: ['cross', 'emphatic'], miku: ['emphatic', 'open'] } }
+        };
+
+        const _noAccents = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        function classifyAttitude(text, name) {
+            const m = _noAccents(text);
+            const isNino = name === 'nino';
+            if (isNino && /\b(tch|tonto|idiota|baka|hmph|no es que|no te creas|que pesado|ni se te ocurra)\b/.test(m)) return 'tsun';
+            if (/\b(lo siento|entiendo|tranquil|preocup|dificil|aqui estoy|te escucho|animo|cuidate|comprendo)\b/.test(m)) return 'reflect';
+            if (/\b(gracias|me alegra|encantad|feliz|genial|increible|cariño|cuenta conmigo|me gusta|jaja|jeje|hola)\b/.test(m)) {
+                return (isNino && /\b(gracias|me gusta|cariño)\b/.test(m)) ? 'shy' : 'warm';
+            }
+            if (/[?¿]/.test(m) || /\b(que opinas|crees que|por que|cuando|donde)\b/.test(m)) return 'curious';
+            if (/!|\b(oye|basta|claro que|por supuesto|obvio|sin duda|definitivamente)\b/.test(m)) return 'emphatic';
+            if (/\.\.\.|…|\b(bueno|pues|quiza|tal vez|no se|es que|mmm)\b/.test(m)) return isNino ? 'shy' : 'reflect';
+            if (/\b(primero|despues|por ejemplo|significa|consiste|paso|explico|en resumen|porque|ademas)\b/.test(m)) return 'explain';
+            return 'neutral';
+        }
+        function splitSentences(text) {
+            const raw = String(text || '').replace(/\s+/g, ' ').trim();
+            if (!raw) return [];
+            const parts = raw.match(/[^.!?¡¿…]+[.!?…]*\s*/g) || [raw];
+            const out = []; let acc = 0;
+            const total = raw.length;
+            for (const p of parts) {
+                const s = p.trim();
+                if (!s) continue;
+                out.push({ text: s, a: acc / total, b: (acc + p.length) / total });
+                acc += p.length;
+            }
+            return out;
+        }
+
+        // ══════════════════════════════════════════════════════════════════════
+        //  CEREBRO DEL AVATAR
+        // ══════════════════════════════════════════════════════════════════════
+        const EXPR_ALIASES = {
+            happy: ['happy', 'joy'], sad: ['sad', 'sorrow'], angry: ['angry'], relaxed: ['relaxed', 'fun'],
+            surprised: ['surprised'], blush: ['blush'],
+            aa: ['aa', 'a'], ih: ['ih', 'i'], ou: ['ou', 'u'], ee: ['ee', 'e'], oh: ['oh', 'o'],
+            blink: ['blink'], blinkL: ['blinkLeft', 'blink_l'], blinkR: ['blinkRight', 'blink_r']
+        };
+
+        class AvatarBrain {
+            constructor() {
+                this.vrm = null; this.rig = null; this.name = 'nino'; this.P = PERSONA.nino;
+                this.time = 0;
+                this.gazeObj = new THREE.Object3D();
+                this.reset();
+            }
 
             reset() {
-                this.active = false; this.progress = 0;
-                this.bounceActive = false; this.bounceProgress = 0;
+                this.ent = { active: false, s: 0, v: 0, phase: 0, t: 0, L: 1, arrived: true, path: null, table: null, walkW: 0, glanced: false };
+                this.S = 0; this.L = 0;
+                this.sentences = []; this.speechClock = 0; this.sentIdx = -1; this.attName = 'neutral';
+                this.att = Object.assign({}, ATTITUDE.neutral);
+                this.dir = { unit: null, t: 0, dur: 0, cooldown: 1.0, last: '', dom: 'right' };
+                this.idleAct = { name: 'none', t: 0, dur: 0, next: 6 };
+                this.lastInteraction = 0;
+                this.beat = 0; this.beatSide = 1;
+                this.pros = { env: 0, avg: 0, lastOnset: -1, wasVoiced: false, gap: 0 };
+                this.lips = { a: 0, o: 0, u: 0, e: 0, i: 0, open: 0, syl: 0, sylAmp: 0, vow: 'a', pause: 0, count: 0 };
+                this.face = { happy: 0, sad: 0, angry: 0, relaxed: 0, surprised: 0, blush: 0 };
+                this.blink = { t: 0, next: 2.5, dur: 0.18, active: false, double: false };
+                this.gaze = { mode: 'cam', t: 0, hold: 2, ox: 0, oy: 0, tx: 0, ty: 0, sacT: 0, sx: 0, sy: 0, hx: 0, hy: 0 };
+                this.head = { yaw: 0, lean: 0, tilt: 0 };
+                this.pose = { chestLean: 0, spineLean: 0, hipYaw: 0, hipTilt: 0 };
+                this.stand = { phase: rand(0, 6), w: 0 };
+                this.nodPulse = 0; this.nodTimer = 3;
+                this.walkLegs = { l: [0, 0, 0], r: [0, 0, 0] };
+                this.pelvisY = 0;
+                this.shrug = 0;
             }
-        };
+
+            // ── Carga de modelo ───────────────────────────────────────────────
+            load(vrm, name) {
+                this.reset();
+                this.vrm = vrm; this.name = name;
+                this.P = PERSONA[name] || PERSONA.nino;
+                try { vrm.humanoid.resetNormalizedPose(); } catch (_) {}
+                this.rig = new Rig(vrm);
+                this.resolveExpressions();
+                this.hang = this.makeHang();
+                this.arms = {};
+                for (const side of ['left', 'right']) {
+                    if (this.rig.arm[side]) this.arms[side] = new ArmCtl(this.hang);
+                }
+                this.applyRestPose();
+                this.time = 0;
+                this.lastInteraction = 0;
+            }
+
+            resolveExpressions() {
+                this.ex = {};
+                const em = this.vrm.expressionManager;
+                for (const k in EXPR_ALIASES) {
+                    this.ex[k] = null;
+                    if (!em) continue;
+                    for (const n of EXPR_ALIASES[k]) {
+                        const e = em.getExpression ? em.getExpression(n) : (em.expressionMap ? em.expressionMap[n] : null);
+                        if (e) { this.ex[k] = n; break; }
+                    }
+                }
+            }
+
+            makeHang() {
+                const b = this.P.hangBeta;
+                return P([Math.sin(b) * 0.975, -Math.cos(b) * 0.975, 0.05], [0.25, 0, -1], [-1, 0.1, 0.35], 0.42, 0);
+            }
+
+            applyRestPose() {
+                for (const side in this.arms) {
+                    this.rig.solveArm(side, this.arms[side].cur);
+                }
+            }
+
+            // ── Eventos externos ──────────────────────────────────────────────
+            setSpeechText(text) {
+                this.sentences = splitSentences(text).map(s => Object.assign(s, { att: classifyAttitude(s.text, this.name) }));
+                this.speechClock = 0; this.sentIdx = -1;
+                this.estDuration = Math.max(1.5, String(text || '').length / 14);
+            }
+
+            notify() { this.lastInteraction = this.time; if (this.idleAct.name !== 'none' && this.idleAct.name !== 'wave') this.idleAct.t = this.idleAct.dur; }
+
+            startEntrance() {
+                const rig = this.rig; if (!rig) return;
+                const P0 = V3(2.3, 0, -0.6), P1 = V3(0.9, 0, -0.6), P2 = V3(0, 0, -0.42), P3 = V3(0, 0, 0);
+                const curve = new THREE.CubicBezierCurve3(P0, P1, P2, P3);
+                const table = [0]; let prev = curve.getPoint(0); let acc = 0; const N = 120;
+                for (let i = 1; i <= N; i++) { const p = curve.getPoint(i / N); acc += p.distanceTo(prev); table.push(acc); prev = p; }
+                Object.assign(this.ent, { active: true, s: 0, t: 0, phase: 0, L: acc, curve, table, N, arrived: false, glanced: false, v: this.P.walkSpeed * 0.9, walkW: 1 });
+                this.vrm.scene.visible = true;
+                this.placeOnPath(0, 1 / 60, true);
+                for (const side in this.arms) { const c = this.arms[side]; c.cur = cloneSpec(this.hang); c.mid = cloneSpec(this.hang); c.goal = cloneSpec(this.hang); }
+                this.idleAct = { name: 'none', t: 0, dur: 0, next: 9 };
+                this.dir.unit = null; this.dir.cooldown = 1;
+            }
+
+            paramAt(s) {
+                const e = this.ent, tb = e.table;
+                let lo = 0, hi = e.N;
+                while (hi - lo > 1) { const m = (lo + hi) >> 1; if (tb[m] <= s) lo = m; else hi = m; }
+                const seg = tb[hi] - tb[lo] || 1;
+                return (lo + (s - tb[lo]) / seg) / e.N;
+            }
+
+            placeOnPath(s, dt, instant) {
+                const e = this.ent, sc = this.vrm.scene, rig = this.rig;
+                const u = clamp01(this.paramAt(clamp(s, 0, e.L)));
+                const p = e.curve.getPoint(u);
+                const tan = e.curve.getTangent(Math.min(0.999, u));
+                const heading = Math.atan2(tan.x, tan.z);
+                const target = heading + rig.frontYaw;
+                if (instant) sc.rotation.y = target; else sc.rotation.y = dampAngle(sc.rotation.y, target, 9, dt);
+                sc.position.set(p.x, 0, p.z);
+                return u;
+            }
+
+            // ── Paso principal ────────────────────────────────────────────────
+            //  ctx: { speaking, listening, audioPlaying, feat, progress, camera }
+            update(dt, ctx) {
+                if (!this.vrm || !this.rig) return;
+                dt = Math.min(dt, 0.05);
+                this.time += dt;
+                const P = this.P, rig = this.rig, t = this.time;
+                const speaking = !!ctx.speaking, listening = !!ctx.listening;
+                this.S = damp(this.S, speaking ? 1 : 0, 9, dt);
+                this.L = damp(this.L, listening ? 1 : 0, 7, dt);
+                const S = this.S, L = this.L;
+                if (speaking || listening) this.lastInteraction = t;
+                const idleFor = t - this.lastInteraction;
+
+                // Locomoción (entrada)
+                const walking = this.updateWalk(dt);
+                this.updateAttitude(dt, ctx);
+                this.updateProsody(dt, ctx);
+                this.updateIdleAction(dt, idleFor, speaking || listening);
+                this.updateDirector(dt, speaking, listening, walking);
+                this.updateBody(dt, ctx, walking, idleFor);
+                this.updateArms(dt, walking);
+                this.updateLegs(dt, walking);
+                this.updateGaze(dt, ctx, walking, idleFor);
+                this.updateFace(dt, ctx, idleFor);
+            }
+
+            // ── Entrada caminando ─────────────────────────────────────────────
+            updateWalk(dt) {
+                const e = this.ent, P = this.P;
+                if (!e.active) { e.walkW = damp(e.walkW, 0, 7, dt); return e.walkW > 0.02; }
+                e.t += dt;
+                const rem = Math.max(0, e.L - e.s);
+                const vc = P.walkSpeed;
+                const decel = (vc * vc) / (2 * 1.15);                 // frena durante ~1.15 m
+                let v = Math.min(vc, Math.sqrt(2 * decel * rem) + 0.10);
+                e.v = damp(e.v, v, 6, dt);
+                e.s = Math.min(e.L, e.s + e.v * dt);
+                e.phase += (e.v * dt / P.stepLen) * Math.PI;
+                this.placeOnPath(e.s, dt, false);
+                e.walkW = clamp01(e.v / vc * 1.25);
+                if (e.L - e.s < 0.012 || e.t > 9) {
+                    e.active = false; e.arrived = true;
+                    this.vrm.scene.position.set(0, 0, 0);
+                    this.vrm.scene.rotation.y = rig_front(this.rig);
+                    this.onArrive();
+                }
+                return true;
+            }
+
+            onArrive() {
+                this.lastInteraction = this.time - 3;
+                this.idleAct = { name: this.P.arrival, t: 0, dur: this.P.arrival === 'wave' ? 2.6 : 2.4, next: rand(7, 10) };
+                this.gaze.mode = 'cam'; this.gaze.t = 0; this.gaze.hold = rand(1.5, 2.5);
+                this.blink.next = 0.15;
+            }
+
+            // ── Actitud por frase ─────────────────────────────────────────────
+            updateAttitude(dt, ctx) {
+                let name = 'neutral';
+                if (ctx.speaking && this.sentences.length) {
+                    this.speechClock += dt;
+                    let prog = (ctx.progress != null && ctx.progress >= 0) ? ctx.progress : clamp01(this.speechClock / (this.estDuration || 4));
+                    let idx = this.sentences.findIndex(s => prog >= s.a && prog < s.b);
+                    if (idx < 0) idx = this.sentences.length - 1;
+                    if (idx !== this.sentIdx) { this.sentIdx = idx; this.onSentenceChange(); }
+                    name = this.sentences[idx].att;
+                } else if (ctx.speaking) name = 'neutral';
+                this.attName = name;
+                const tgt = ATTITUDE[name] || ATTITUDE.neutral;
+                for (const k of ['amp', 'beat', 'lean', 'tilt', 'yaw', 'happy', 'relaxed', 'angry', 'blush', 'away']) {
+                    this.att[k] = damp(this.att[k], ctx.speaking ? tgt[k] : ATTITUDE.neutral[k], 3, dt);
+                }
+            }
+
+            onSentenceChange() {
+                // Una frase nueva suele traer un gesto nuevo y una mirada/parpadeo de transición
+                const d = this.dir;
+                if (d.unit && d.t > 0.8) { d.t = Math.max(d.t, d.dur - 0.5); }
+                d.cooldown = Math.min(d.cooldown, 0.2);
+                if (Math.random() < 0.55) this.blink.next = Math.min(this.blink.next, this.blink.t + 0.05);
+            }
+
+            // ── Prosodia: pulsos de énfasis a partir de la energía de la voz ──
+            updateProsody(dt, ctx) {
+                const pr = this.pros;
+                let level = 0, voiced = false;
+                if (ctx.speaking) {
+                    if (ctx.feat && ctx.feat.live) { level = ctx.feat.open; voiced = level > 0.12; }
+                    else { level = this.lips.open; voiced = level > 0.2; }
+                }
+                pr.env = damp(pr.env, level, 22, dt);
+                pr.avg = damp(pr.avg, level, 1.6, dt);
+                this.beat = Math.max(0, this.beat - dt * 2.6);
+                const since = this.time - pr.lastOnset;
+                if (ctx.speaking && pr.env > pr.avg * 1.45 + 0.12 && since > 0.32 && pr.env > 0.35) {
+                    pr.lastOnset = this.time;
+                    const strength = clamp01((pr.env - pr.avg) * 2.2 + 0.35);
+                    if (strength > 0.4) { this.beat = Math.max(this.beat, strength); this.beatSide = Math.random() < 0.5 ? 1 : -1; }
+                }
+                if (!ctx.speaking) this.beat = 0;
+            }
+
+            // ── Acciones de reposo (según personalidad) ───────────────────────
+            updateIdleAction(dt, idleFor, busy) {
+                const a = this.idleAct;
+                if (busy && a.name !== 'none') { a.name = 'none'; a.t = 0; }
+                if (a.name !== 'none') {
+                    a.t += dt;
+                    if (a.t >= a.dur) { a.name = 'none'; a.t = 0; }
+                    return;
+                }
+                if (busy || this.ent.active) return;
+                a.next -= dt;
+                if (a.next <= 0 && idleFor > 4) {
+                    const name = pick(this.P.idle);
+                    const durs = { hairTouch: 2.6, armsCross: 4.2, lookAround: 2.8, sigh: 2.2, fidget: 2.4, sway: 3.2, clasp: 4.0, wave: 2.6 };
+                    this.idleAct = { name, t: 0, dur: durs[name] || 2.5, next: rand(4.5, 8.5) * (idleFor > 24 ? 0.7 : 1) };
+                }
+            }
+
+            // ── Director de gestos al hablar ──────────────────────────────────
+            gestureSpec(name, side) {
+                const r = this.rig, kp = r.kp;
+                const left = side === 'left';
+                switch (name) {
+                    case 'explain': return P_(r.armUnits(side, kp.belly, 0.115, 0.10, 0.13), [0.8, -1, 0.1], [0.1, 0.95, 0.2], 0.2, -0.12);
+                    case 'list':    return P_(r.armUnits(side, kp.chest, 0.12, -0.09, 0.16), [0.7, -1, 0], [-0.9, 0.3, 0.1], 0.55, 0.1);
+                    case 'open':    return P_(r.armUnits(side, kp.belly, 0.21, 0.12, 0.11), [0.9, -1, 0], [0, 1, 0.25], 0.12, -0.2);
+                    case 'emphatic':return P_(r.armUnits(side, kp.chest, 0.09, -0.07, 0.20), [0.6, -1, 0], [-1, -0.1, 0.1], 0.6, 0.1);
+                    case 'chest':   return P_(r.armUnits(side, kp.chest, 0.10, -0.02, 0.05), [0.9, -1, 0.3], [-0.2, 0, -1], 0.25, 0.05);
+                    case 'chin':    return P_(r.armUnits(side, kp.chin, 0.075, -0.065, 0.06), [1.0, -1, 0.5], [-0.3, 0.1, -1], 0.35, 0.12);
+                    case 'hair': {
+                        const ear = left ? kp.earL : kp.earR;
+                        return P_(r.armUnits(side, ear, 0.125, -0.06, 0.02), [0.25, -0.6, 1.0], [-1, 0.1, 0.1], 0.3, 0.1);
+                    }
+                    case 'shy':     return P_(r.armUnits(side, kp.chest, 0.09, -0.10, 0.09), [0.8, -1, 0.3], [-0.5, 0.6, -0.4], 0.5, 0.1);
+                    case 'cheer':   return P_(r.armUnits(side, kp.chin, 0.22, -0.10, 0.07), [0.9, -1, -0.2], [-0.2, 0.3, 0.9], 0.15, -0.1);
+                    case 'cross':   // brazos cruzados: el izquierdo por encima y delante del derecho
+                        return left
+                            ? P_(r.armUnits(side, kp.belly, -0.12, 0.10, 0.12), [1.0, -1, 0.6], [0, 0.5, -0.8], 0.4, 0.05)
+                            : P_(r.armUnits(side, kp.belly, -0.20, 0.065, 0.065), [1.0, -1, 0.4], [0, 0.5, -0.8], 0.4, 0.05);
+                    case 'clasp':   return P_(r.armUnits(side, kp.belly, 0.10, 0.03, 0.09), [0.8, -1, 0.3], [-0.4, 0.8, 0.2], 0.5, 0.1);
+                    case 'wave':    return P_(r.armUnits(side, kp.chin, 0.30, 0.02, 0.10), [0.5, -1, -0.3], [-0.1, 0.2, 1.0], 0.1, 0);
+                    default: return this.ready();
+                }
+            }
+
+            ready(side) {
+                const r = this.P.ready;
+                return P(r, [0.8, -1, -0.1], [-0.5, 0.8, 0.3], 0.35, 0);
+            }
+
+            pickUnit() {
+                const P = this.P, d = this.dir;
+                const att = ATTITUDE[this.attName] || ATTITUDE.neutral;
+                const pool = (att.g[this.name] || att.g.nino).filter(g => g !== d.last);
+                const name = pick(pool.length ? pool : att.g.nino);
+                const both = (name === 'open' || name === 'cheer' || name === 'cross' || name === 'shy' || name === 'clasp')
+                    ? true : Math.random() < P.twoHand;
+                const dom = Math.random() < 0.82 ? P.dom : (P.dom === 'right' ? 'left' : 'right');
+                d.unit = { name, both, dom };
+                d.t = 0;
+                d.dur = rand(P.unitLen[0], P.unitLen[1]) / (0.85 + 0.3 * (att.beat > 1 ? 1 : 0.7));
+                d.last = name;
+            }
+
+            updateDirector(dt, speaking, listening, walking) {
+                const d = this.dir, P = this.P;
+                const goalFor = (side) => {
+                    // Prioridad: entrada > acción de reposo > habla > escucha > reposo
+                    if (walking) return null;
+                    const a = this.idleAct;
+                    if (a.name !== 'none' && !speaking) return this.idleSpec(a, side);
+                    if (speaking) {
+                        if (d.unit) {
+                            const u = d.unit;
+                            const active = d.t > 0.10 && d.t < d.dur - 0.45;
+                            const isDom = side === u.dom;
+                            if (active && (u.both || isDom)) return this.gestureSpec(u.name, side);
+                        }
+                        return this.ready();
+                    }
+                    if (listening) return P_(this.P.ready, [0.8, -1, -0.1], [-0.5, 0.8, 0.3], 0.38, 0, 0.9);
+                    return this.hang;
+                };
+                if (speaking && !walking) {
+                    if (!d.unit) {
+                        d.cooldown -= dt;
+                        if (d.cooldown <= 0) this.pickUnit();
+                    } else {
+                        d.t += dt;
+                        if (d.t >= d.dur) { d.unit = null; d.cooldown = rand(P.gestureGap[0], P.gestureGap[1]); }
+                    }
+                } else if (!speaking) {
+                    d.unit = null; d.cooldown = 0.5;
+                }
+                for (const side in this.arms) {
+                    const g = goalFor(side);
+                    if (g) {
+                        const quick = (speaking && d.unit && d.t < 0.6) ? 1.25 : 1.0;
+                        this.arms[side].setGoal(g, P.armLambda * quick * (this.idleAct.name === 'wave' ? 1.4 : 1));
+                    }
+                }
+            }
+
+            idleSpec(a, side) {
+                const u = clamp01(a.t / a.dur);
+                const env = Math.sin(Math.min(1, u) * Math.PI);             // 0→1→0
+                const hold = smooth01(u / 0.2) * (1 - smooth01((u - 0.8) / 0.2));
+                switch (a.name) {
+                    case 'hairTouch': return side === 'right' ? lerpSpec(this.hang, this.gestureSpec('hair', 'right'), hold) : this.hang;
+                    case 'armsCross': return lerpSpec(this.hang, this.gestureSpec('cross', side), hold);
+                    case 'clasp':     return lerpSpec(this.hang, this.gestureSpec('clasp', side), hold);
+                    case 'fidget':    return lerpSpec(this.hang, this.gestureSpec('shy', side), hold * 0.9);
+                    case 'wave': {
+                        if (side !== 'right') return this.hang;
+                        const w = this.gestureSpec('wave', 'right');
+                        const k = hold, sw = Math.sin(a.t * 9.5) * 0.11 * k;
+                        const s = lerpSpec(this.hang, w, k);
+                        s.t[0] += sw; s.palm[0] += Math.sin(a.t * 9.5 + 1.0) * 0.5 * k;
+                        return s;
+                    }
+                    default: return this.hang;
+                }
+            }
+
+            // ── Cuerpo: respiración, postura, cabeza ──────────────────────────
+            updateBody(dt, ctx, walking, idleFor) {
+                const rig = this.rig, P = this.P, t = this.time, S = this.S, L = this.L, att = this.att;
+                const e = this.ent, a = this.idleAct;
+                const isMiku = this.name === 'miku';
+                const speakBoost = 1 + 0.6 * S;
+                const breath = Math.sin(t * Math.PI * 2 / (P.breathPeriod / speakBoost));
+                const walkW = e.walkW;
+                const sinPh = Math.sin(e.phase);
+
+                // Torso
+                const restless = clamp01((idleFor - 8) / 14);
+                let chestLean = P.postureLean + att.lean * S + 0.045 * L + (-breath) * P.breathAmp * 0.8 + 0.012 * restless * Math.sin(t * 0.9);
+                let chestYaw = Math.sin(t * 0.6) * 0.012 + (walking ? 0.12 * sinPh * walkW : 0) + Math.sin(t * 2.1) * 0.012 * S;
+                let chestTilt = Math.sin(t * 0.8 + 1.1) * 0.010 + att.tilt * 0.25 * S;
+                if (isMiku) { chestTilt += Math.sin(t * Math.PI * 2 / 3.2) * 0.020; }
+                if (a.name === 'sigh') { const k = Math.sin(clamp01(a.t / a.dur) * Math.PI); chestLean += -0.05 * k * Math.min(1, a.t / 0.9) + 0.07 * k * smooth01((a.t - 0.9) / 0.8); this.shrug = k; }
+                else this.shrug = damp(this.shrug, 0, 5, dt);
+                chestLean += 0.03 * this.beat * P.beat * (S > 0.3 ? 1 : 0);
+                this.pose.chestLean = damp(this.pose.chestLean, chestLean, 8, dt);
+                this.pose.chestYaw = damp(this.pose.chestYaw || 0, chestYaw, 8, dt);
+                this.pose.chestTilt = damp(this.pose.chestTilt || 0, chestTilt, 6, dt);
+                rig.setPosture('spine', this.pose.chestLean * 0.45, this.pose.chestYaw * 0.4, this.pose.chestTilt * 0.4);
+                rig.setPosture('chest', this.pose.chestLean * 0.35, this.pose.chestYaw * 0.35, this.pose.chestTilt * 0.35);
+                rig.setPosture('upperChest', this.pose.chestLean * 0.2, this.pose.chestYaw * 0.25, this.pose.chestTilt * 0.25);
+
+                // Pelvis / apoyo
+                this.stand.phase += dt * (isMiku ? 0.55 : 0.38);
+                const shift = Math.sin(this.stand.phase);                       // -1..1: peso a un lado
+                let hipYaw = (walking ? -0.09 * sinPh * walkW : 0) + Math.sin(t * 0.7) * 0.012 * P.hipSway;
+                let hipTilt = shift * 0.028 * (1 - walkW) + (isMiku ? Math.sin(t * Math.PI * 2 / 3.2 + 0.6) * 0.022 : 0);
+                if (a.name === 'sway') { const k = Math.sin(clamp01(a.t / a.dur) * Math.PI); hipTilt += Math.sin(a.t * 2.0 * Math.PI / 1.6) * 0.05 * k; hipYaw += Math.sin(a.t * 2.0 * Math.PI / 1.6 + 0.8) * 0.06 * k; }
+                this.pose.hipYaw = damp(this.pose.hipYaw, hipYaw, 8, dt);
+                this.pose.hipTilt = damp(this.pose.hipTilt, hipTilt, 6, dt);
+                rig.setPosture('hips', 0, this.pose.hipYaw, this.pose.hipTilt);
+                this.shiftW = shift;
+
+                // Cabeza
+                let yaw = 0, lean = P.headLean, tilt = P.headTilt;
+                const cam = this.camAngles(ctx.camera);
+                const track = (speaking_or_listen(S, L) ? 0.5 : 0.28);
+                yaw += clamp(cam.yaw, -0.7, 0.7) * track;
+                lean += clamp(-cam.pitch, -0.35, 0.35) * track * 0.6;
+                yaw += att.yaw * S * this.sideSign();
+                tilt += att.tilt * S; lean += att.lean * 0.6 * S;
+                yaw += (Math.sin(t * 0.55) * 0.018 + Math.sin(t * 1.3 + 0.4) * 0.008) + (Math.sin(t * 2.3) * 0.026 + Math.sin(t * 3.7) * 0.012) * S * P.nod;
+                lean += Math.sin(t * 0.8) * 0.010 + Math.sin(t * 2.9) * 0.014 * S * P.nod;
+                tilt += Math.sin(t * 0.47) * 0.012 + Math.sin(t * 1.9 + 1) * 0.016 * S;
+                lean += 0.05 * this.beat * P.nod * S;
+                lean += 0.06 * L; if (isMiku) tilt += 0.07 * L;
+                // asentimiento de escucha
+                this.nodTimer -= dt;
+                if (L > 0.5 && this.nodTimer <= 0) { this.nodPulse = 1; this.nodTimer = rand(2.4, 4.2); }
+                this.nodPulse = Math.max(0, this.nodPulse - dt * 1.8);
+                lean += 0.07 * Math.sin(this.nodPulse * Math.PI) * (L > 0.3 ? 1 : 0);
+                // mirada desviada arrastra un poco la cabeza
+                yaw += this.gaze.hx * 0.55; lean += -this.gaze.hy * 0.35;
+                // acciones
+                if (a.name === 'lookAround') { const k = Math.sin(clamp01(a.t / a.dur) * Math.PI); yaw += Math.sin(a.t * 2.0) * 0.32 * k; lean += Math.sin(a.t * 1.5) * 0.05 * k; }
+                if (a.name === 'fidget') { const k = Math.sin(clamp01(a.t / a.dur) * Math.PI); tilt += Math.sin(a.t * 3.4) * 0.04 * k; lean += 0.07 * k; yaw += this.sideSign() * 0.16 * k; }
+                if (a.name === 'armsCross') { const k = Math.sin(clamp01(a.t / a.dur) * Math.PI); yaw += this.sideSign() * 0.22 * Math.min(1, k * 1.6); lean += -0.04 * k; tilt += 0.05 * k; }
+                if (a.name === 'sigh') { const k = Math.sin(clamp01(a.t / a.dur) * Math.PI); lean += 0.10 * k * (a.t < a.dur * 0.5 ? 1 : 0.3); }
+                if (a.name === 'wave') { const k = Math.sin(clamp01(a.t / a.dur) * Math.PI); tilt += 0.10 * k; }
+                if (a.name === 'hairTouch' && !isMiku) { const k = Math.sin(clamp01(a.t / a.dur) * Math.PI); yaw += this.sideSign() * 0.15 * k; lean += 0.05 * k; tilt -= 0.06 * k; }
+                // entrada: la cabeza se adelanta al giro y busca la cámara; se estabiliza al caminar
+                if (e.active) {
+                    const prog = e.s / e.L;
+                    const look = smooth01((prog - 0.45) / 0.25);
+                    yaw += clamp(cam.yaw, -0.9, 0.9) * 0.6 * look;
+                    lean += -0.03 * look + 0.012 * Math.sin(e.phase * 2) * e.walkW * 0.6;
+                    if (isMiku) tilt += 0.07 * look;
+                }
+                const hl = P.headLambda;
+                this.head.yaw = damp(this.head.yaw, yaw, hl, dt);
+                this.head.lean = damp(this.head.lean, lean, hl, dt);
+                this.head.tilt = damp(this.head.tilt, tilt, hl, dt);
+                rig.setPosture('neck', this.head.lean * 0.38, this.head.yaw * 0.38, this.head.tilt * 0.38);
+                rig.setPosture('head', this.head.lean * 0.62, this.head.yaw * 0.62, this.head.tilt * 0.62);
+            }
+
+            sideSign() { if (this._side === undefined) this._side = Math.random() < 0.5 ? 1 : -1; if (Math.random() < 0.0008) this._side *= -1; return this._side; }
+
+            camAngles(camera) {
+                if (!camera || !this.rig.b.head) return { yaw: 0, pitch: 0 };
+                const head = this.rig.b.head;
+                head.getWorldPosition(_va);
+                _vb.copy(camera.position).sub(_va);
+                const q = this.vrm.scene.quaternion;
+                const F = _vc.copy(this.rig.F).applyQuaternion(q), Lf = _vd.copy(this.rig.Lft).applyQuaternion(q);
+                const f = _vb.dot(F), l = _vb.dot(Lf), u = _vb.y;
+                return { yaw: Math.atan2(l, f), pitch: Math.atan2(u, Math.hypot(f, l)) };
+            }
+
+            // ── Brazos ────────────────────────────────────────────────────────
+            updateArms(dt, walking) {
+                const e = this.ent, P = this.P, rig = this.rig, S = this.S;
+                const att = this.att;
+                const walkW = e.walkW;
+                for (const side in this.arms) {
+                    const ctl = this.arms[side];
+                    ctl.step(dt);
+                    const extra = {};
+                    if (walkW > 0.02) {
+                        const sgn = side === 'left' ? -1 : 1;                // brazo contrario a la pierna
+                        const sw = Math.sin(e.phase) * sgn * P.armSwing * walkW;
+                        extra.swing = sw;
+                        extra.reach = 0.94 + 0.03 * Math.cos(e.phase + (side === 'left' ? 0 : Math.PI));
+                    }
+                    // pulsos de énfasis: golpe corto hacia abajo-delante en la mano activa
+                    if (S > 0.3 && this.beat > 0.01 && this.dir.unit) {
+                        const isDom = side === this.dir.unit.dom;
+                        const env = Math.sin(clamp01(this.beat) * Math.PI) * 0.5 + (this.beat > 0.5 ? 0.5 * this.beat : 0);
+                        const k = (isDom || this.dir.unit.both ? 1 : 0.35) * P.beat * att.beat * S * (this.dir.t > 0.2 && this.dir.t < this.dir.dur - 0.4 ? 1 : 0.2);
+                        extra.u = -0.07 * env * k; extra.f = 0.03 * env * k;
+                    }
+                    // respiración en las manos al estar quieta
+                    if (walkW < 0.5) { extra.u = (extra.u || 0) + Math.sin(this.time * 1.3 + (side === 'left' ? 0 : 1.2)) * 0.006; }
+                    rig.solveArm(side, ctl.cur, extra);
+                }
+            }
+
+            // ── Piernas, pelvis y apoyo ───────────────────────────────────────
+            updateLegs(dt, walking) {
+                const rig = this.rig, e = this.ent, P = this.P;
+                if (!rig.hasLegs) return;
+                const W = e.walkW;
+                const ph = e.phase;
+                const stride = (p) => {
+                    const hip = 0.42 * Math.sin(p) + 0.05;
+                    const swing = Math.max(0, Math.cos(p - 0.2));
+                    const load = Math.max(0, Math.cos(p - 2.3));
+                    const knee = 0.07 + 0.62 * swing * swing + 0.10 * load * load;
+                    const foot = 0.30 * smooth01((-Math.sin(p) - 0.45) / 0.55);
+                    return [hip, knee, foot];
+                };
+                const lw = stride(ph), rw = stride(ph + Math.PI);
+                // apoyo en reposo: la pierna descargada flexiona un poco
+                const sh = this.shiftW || 0;
+                const standL = [0.01 + 0.03 * Math.max(0, sh), 0.02 + 0.10 * Math.max(0, sh), 0];
+                const standR = [0.01 + 0.03 * Math.max(0, -sh), 0.02 + 0.10 * Math.max(0, -sh), 0];
+                const amp = Math.pow(clamp01(e.v / P.walkSpeed), 0.6) * W;
+                const mix = (s, w) => [s[0] + (w[0] - s[0]) * amp, s[1] + (w[1] - s[1]) * amp, s[2] + (w[2] - s[2]) * amp];
+                const L_ = mix(standL, lw), R_ = mix(standR, rw);
+                const rl = rig.setLeg('left', L_[0], L_[1], L_[2], 0.012 * (1 - W));
+                const rr = rig.setLeg('right', R_[0], R_[1], R_[2], 0.012 * (1 - W));
+                // Altura de la pelvis: la pierna más extendida toca el suelo
+                const full = rig.legL1 + rig.legL2;
+                let py = -(full - Math.max(rl, rr));
+                py += P.bounce * Math.abs(Math.sin(ph)) * W;
+                this.pelvisY = damp(this.pelvisY, py, 30, dt);
+                const hips = rig.b.hips;
+                const lat = -Math.cos(ph) * 0.014 * W * P.hipSway - this.shiftW * 0.010 * (1 - W);
+                hips.position.copy(rig.hipsRest).addScaledVector(rig.U, this.pelvisY).addScaledVector(rig.Lft, lat);
+            }
+
+            // ── Mirada ────────────────────────────────────────────────────────
+            updateGaze(dt, ctx, walking, idleFor) {
+                const g = this.gaze, P = this.P, att = this.att, S = this.S;
+                g.t += dt; g.sacT -= dt;
+                if (g.t >= g.hold) {
+                    g.t = 0;
+                    const awayP = clamp01((1 - P.eyeContact) * att.away * (this.S > 0.3 ? 1.1 : 0.8) + (this.idleAct.name === 'lookAround' ? 0.9 : 0));
+                    if (g.mode === 'cam' && Math.random() < awayP + 0.05) {
+                        g.mode = 'away'; g.hold = rand(0.45, 1.1) * (att.away > 1.5 ? 1.4 : 1);
+                        const down = (this.attName === 'shy' || this.attName === 'warm') && this.name === 'nino';
+                        const up = this.attName === 'reflect' || this.attName === 'curious';
+                        const sx = Math.random() < 0.5 ? -1 : 1;
+                        g.tx = sx * rand(0.10, 0.28);
+                        g.ty = down ? -rand(0.10, 0.22) : (up ? rand(0.08, 0.20) : rand(-0.06, 0.10));
+                        if (Math.random() < 0.6) this.blink.next = Math.min(this.blink.next, this.blink.t + 0.02);
+                    } else {
+                        g.mode = 'cam'; g.hold = rand(1.6, 4.2); g.tx = 0; g.ty = 0;
+                    }
+                }
+                if (g.sacT <= 0) { g.sacT = rand(0.25, 0.9); g.sx = rand(-0.012, 0.012); g.sy = rand(-0.008, 0.008); }
+                g.ox = damp(g.ox, g.tx + g.sx, 22, dt);
+                g.oy = damp(g.oy, g.ty + g.sy, 22, dt);
+                g.hx = damp(g.hx, g.tx * 0.5, 5, dt);
+                g.hy = damp(g.hy, g.ty * 0.5, 5, dt);
+                // objetivo de mirada en el mundo (alrededor de la cámara)
+                const cam = ctx.camera;
+                if (cam) {
+                    const camRight = _va.set(1, 0, 0).applyQuaternion(cam.quaternion);
+                    const camUp = _vb.set(0, 1, 0).applyQuaternion(cam.quaternion);
+                    const dist = 1.6;
+                    this.gazeObj.position.copy(cam.position)
+                        .addScaledVector(camRight, g.ox * dist).addScaledVector(camUp, g.oy * dist);
+                    this.gazeObj.updateMatrixWorld(true);
+                }
+            }
+
+            // ── Cara: emociones, boca y parpadeo ──────────────────────────────
+            updateFace(dt, ctx, idleFor) {
+                const P = this.P, S = this.S, L = this.L, att = this.att, f = this.face, t = this.time;
+                const speaking = !!ctx.speaking;
+                const restless = clamp01((idleFor - 24) / 10);
+                // Emociones objetivo (con tope: las emociones completas deforman los ojos)
+                let happy = P.baseHappy * (1 - 0.6 * L) + att.happy * S + (this.idleAct.name === 'wave' ? 0.10 : 0);
+                let relaxed = att.relaxed * S, angry = att.angry * S, sad = 0, surprised = 0.10 * L, blush = att.blush * S;
+                if (this.idleAct.name === 'sigh') relaxed += Math.sin(clamp01(this.idleAct.t / this.idleAct.dur) * Math.PI) * 0.22;
+                if (this.idleAct.name === 'hairTouch' || this.idleAct.name === 'fidget') blush += 0.18 * Math.sin(clamp01(this.idleAct.t / this.idleAct.dur) * Math.PI);
+                if (restless > 0.05) { if (this.name === 'nino') { angry += 0.10 * restless; sad += 0.05 * restless; happy *= (1 - restless); } else { sad += 0.10 * restless; happy *= (1 - 0.5 * restless); } }
+                const cap = speaking ? P.maxHappy : P.maxHappy + 0.04;
+                happy = clamp(happy, 0, cap);
+                relaxed = clamp(relaxed, 0, 0.18); angry = clamp(angry, 0, 0.14); sad = clamp(sad, 0, 0.12);
+                surprised = speaking ? 0 : clamp(surprised, 0, 0.12);
+                blush = clamp(blush, 0, 0.35);
+                f.happy = damp(f.happy, happy, 4, dt); f.relaxed = damp(f.relaxed, relaxed, 4, dt);
+                f.angry = damp(f.angry, angry, 4, dt); f.sad = damp(f.sad, sad, 3, dt);
+                f.surprised = damp(f.surprised, surprised, 7, dt); f.blush = damp(f.blush, blush, 3, dt);
+
+                // Boca
+                const lp = this.updateLips(dt, ctx);
+
+                // Parpadeo
+                const bk = this.blink;
+                bk.t += dt;
+                let blinkV = 0;
+                if (!bk.active && bk.t >= bk.next) { bk.active = true; bk.t = 0; bk.dur = rand(0.15, 0.22); bk.double = Math.random() < 0.14; bk.stage = 0; }
+                if (bk.active) {
+                    const x = bk.t / bk.dur;
+                    blinkV = x < 0.38 ? smooth01(x / 0.38) : 1 - smooth01((x - 0.38) / 0.62);
+                    if (x >= 1) {
+                        if (bk.double && bk.stage === 0) { bk.stage = 1; bk.t = -0.10; bk.double = false; bk.active = true; }
+                        else { bk.active = false; bk.t = 0; bk.next = rand(0.6, 1.5) * P.blinkMean * (idleFor > 12 ? 0.8 : 1) * (speaking ? 0.85 : 1); }
+                    }
+                }
+                const eyeEmo = clamp(0.5 * f.happy + 0.4 * f.relaxed + 0.4 * (f.angry + f.sad), 0, 0.5);
+                blinkV *= (1 - eyeEmo);
+
+                const em = this.vrm.expressionManager;
+                if (!em) return;
+                const set = (k, v) => { const n = this.ex[k]; if (n) em.setValue(n, clamp01(v)); };
+                set('happy', f.happy); set('relaxed', f.relaxed); set('angry', f.angry); set('sad', f.sad);
+                set('surprised', f.surprised); set('blush', f.blush);
+                set('aa', lp.a); set('oh', lp.o); set('ou', lp.u); set('ee', lp.e); set('ih', lp.i);
+                if (this.ex.blink) set('blink', blinkV); else { set('blinkL', blinkV); set('blinkR', blinkV); }
+            }
+
+            // ── Lip-sync: vocales según los formantes del audio, con apertura realista ──
+            updateLips(dt, ctx) {
+                const lp = this.lips, P = this.P;
+                let open = 0, v = { a: 0, o: 0, u: 0, e: 0, i: 0 }, fric = false;
+                if (ctx.speaking) {
+                    if (ctx.feat && ctx.feat.live) {
+                        open = ctx.feat.open; v = ctx.feat.v; fric = ctx.feat.fric;
+                    } else {
+                        // Sin análisis de audio: sílabas sintéticas (≈5 Hz) con pausas entre frases cortas
+                        lp.syl += dt * P.syllRate * (0.85 + 0.3 * Math.sin(this.time * 0.9));
+                        if (lp.pause > 0) { lp.pause -= dt; open = 0; }
+                        else {
+                            if (lp.syl >= 1) {
+                                lp.syl -= Math.floor(lp.syl); lp.count++;
+                                lp.sylAmp = rand(0.35, 1.0);
+                                const r = Math.random();
+                                lp.vow = r < 0.34 ? 'a' : r < 0.54 ? 'o' : r < 0.74 ? 'e' : r < 0.9 ? 'i' : 'u';
+                                if (lp.count % Math.floor(rand(5, 9)) === 0) lp.pause = rand(0.14, 0.32);
+                            }
+                            open = Math.pow(Math.sin(Math.PI * lp.syl), 0.8) * lp.sylAmp;
+                        }
+                        v = { a: 0.15, o: 0.15, u: 0.1, e: 0.1, i: 0.1 }; v[lp.vow] += 0.6;
+                    }
+                }
+                open = clamp01(open) * P.mouthMax;
+                // Apertura: ataque rápido, cierre algo más lento (coarticulación)
+                const up = open > lp.open;
+                lp.open = damp(lp.open, open, up ? 38 : 20, dt);
+                // Curva perceptual: las sílabas suaves también se ven; las fuertes abren del todo
+                const k = clamp01(Math.pow(lp.open, 0.72) * 1.12) * (fric ? 0.5 : 1);
+                for (const key of ['a', 'o', 'u', 'e', 'i']) lp[key] = damp(lp[key], v[key] || 0, 24, dt);
+                // La vocal dominante se lleva la mayor parte de la apertura (exponente > 1 las separa)
+                const w = { a: Math.pow(lp.a, 1.5), o: Math.pow(lp.o, 1.5), u: Math.pow(lp.u, 1.5), e: Math.pow(lp.e, 1.5), i: Math.pow(lp.i, 1.5) };
+                const sum = Math.max(0.001, w.a + w.o + w.u + w.e + w.i);
+                const nrm = k / sum;
+                return {
+                    a: clamp01(w.a * nrm * 1.0), o: clamp01(w.o * nrm * 0.92), u: clamp01(w.u * nrm * 0.8),
+                    e: clamp01(w.e * nrm * 0.8), i: clamp01(w.i * nrm * 0.7 + (fric ? 0.12 * lp.open : 0))
+                };
+            }
+        }
+
+        const speaking_or_listen = (S, L) => (S > 0.3 || L > 0.3);
+        const rig_front = (rig) => rig.frontYaw;
+        function P_(t, pole, palm, curl, wrist, scale) {
+            return P(t, pole, palm, curl, wrist);
+        }
+        function lerpSpec(a, b, k) {
+            const out = cloneSpec(a);
+            for (const key of ['t', 'pole', 'palm']) for (let i = 0; i < 3; i++) out[key][i] = a[key][i] + (b[key][i] - a[key][i]) * k;
+            out.curl = a.curl + (b.curl - a.curl) * k; out.wrist = a.wrist + (b.wrist - a.wrist) * k;
+            return out;
+        }
+        //#CORE_END
+
+
+        // ══════════════════════════════════════════════════════════════
+        //  ENTRADA / CARGA DE MODELO
+        // ══════════════════════════════════════════════════════════════
+        const brain = new AvatarBrain();
+        scene.add(brain.gazeObj);
+        let physicsAccumulator = 0;
+        const physicsStep = 1 / 60;
 
         function beginCharacterEntrance(vrm, waifuName) {
-            if (!vrm || !avatarAuthenticated) return;
-            const modelConfig = waifuModels[waifuName] || waifuModels.nino;
-            walkEntrance.reset();
-            walkEntrance.frontRotation = modelConfig.frontRotation;
-            // Entra desde la derecha (posX > 0): debe mirar hacia la izquierda
-            // es decir, 90° menos que la rotación frontal (en sentido negativo Y).
-            // frontRotation = Math.PI → mirando al frente con el modelo invertido.
-            // entryRotation = frontRotation + Math.PI/2 → mirando en la dirección
-            // de avance (hacia la cámara-izquierda) sin estar de espaldas.
-            walkEntrance.entryRotation = modelConfig.frontRotation + Math.PI / 2;
-            walkEntrance.waifuName = waifuName;
-            walkEntrance.duration = waifuName === 'nino' ? 2.6 : 2.9;
-            vrm.scene.visible = true;
-            vrm.scene.position.set(walkEntrance.startX, 0, 0);
-            vrm.scene.rotation.y = walkEntrance.entryRotation;
-            walkEntrance.active = true;
-            walkEntrance.progress = 0;
-            idleRestless.notify();
-            gestureSystem.reset();
-            expressionController.reset();
+            if (!vrm || !avatarAuthenticated || brain.vrm !== vrm) return;
+            physicsAccumulator = 0;
+            hairPhysics.reset();
+            hairPhysics.init(vrm);
+            clothPhysics.reset();
+            clothPhysics.init(vrm);
+            brain.startEntrance();
         }
-
-        function startAnimationLoop() {
-            if (!avatarAuthenticated || !currentVrm || animationFrameId !== null) return;
-            animationFrameId = requestAnimationFrame(animate);
-        }
-
-        function stopAnimationLoop() {
-            if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
-            animationFrameId = null;
-        }
-
-        function warmAvatarShaders(vrm) {
-            if (!vrm || typeof renderer.compileAsync !== 'function') return;
-            // Prepara los shaders mientras el canvas permanece oculto durante el acceso.
-            vrm.scene.visible = true;
-            try {
-                renderer.compileAsync(scene, camera).catch(() => {}).finally(() => {
-                    if (currentVrm === vrm && !avatarAuthenticated) vrm.scene.visible = false;
-                });
-            } catch (_) {
-                if (!avatarAuthenticated) vrm.scene.visible = false;
-            }
-        }
-
-        window.setAvatarAuthenticated = function (isAuthenticated) {
-            avatarAuthenticated = isAuthenticated === true;
-            if (!avatarAuthenticated) {
-                document.body.classList.remove('avatar-authenticated');
-                if (currentVrm) currentVrm.scene.visible = false;
-                stopAnimationLoop();
-                return;
-            }
-            if (!currentVrm) {
-                document.body.classList.remove('avatar-authenticated');
-                return;
-            }
-            document.body.classList.add('avatar-authenticated');
-            beginCharacterEntrance(currentVrm, activeWaifuAnim);
-            startAnimationLoop();
-        };
-
-        function cargarWaifu(waifuName) {
-            const requestId = ++modelLoadId;
-            const modelConfig = waifuModels[waifuName] || waifuModels.nino;
-            const modelFile = modelConfig.file;
-            loader.load(
-                modelFile,
-                (gltf) => {
-                    const vrm = gltf.userData.vrm;
-                    // Ignore stale responses when the user switches characters quickly.
-                    if (requestId !== modelLoadId) { disposeVrm(vrm); return; }
-                    disposeVrm(currentVrm);
-                    walkEntrance.reset();
-                    hairPhysics.reset();
-                    clothPhysics.reset();
-                    physicsAccumulator = 0;
-                    gestureSystem.reset();
-                    expressionController.reset();
-                    animate._warned = false;
-                    currentVrm = vrm;
-                    activeWaifuAnim = waifuName;
-                    vrm.scene.visible = false;
-                    scene.add(vrm.scene);
-
-                    vrm.scene.rotation.y = modelConfig.frontRotation;
-                    frameMobileFace(vrm);
-
-                    // Detectar si el modelo utiliza convención VRM 1.0 o VRM 0.0
-                    const isVRM1 = (vrm.meta && vrm.meta.metaVersion === '1') || !!(gltf.parser.json?.extensions?.VRMC_vrm);
-                    vrm._isVRM1 = isVRM1;
-
-                    // La escena se prepara durante el inicio de sesión y se revela
-                    // con la entrada completa cuando el servidor valida la cuenta.
-                    vrm.scene.position.set(0, 0, 0);
-
-                    if (vrm.humanoid) {
-                        // Pose de reposo natural: brazos caídos a los lados con una ligera separación
-                        const LUA0 = vrm.humanoid.getNormalizedBoneNode('leftUpperArm');
-                        const RUA0 = vrm.humanoid.getNormalizedBoneNode('rightUpperArm');
-                        const LLA0 = vrm.humanoid.getNormalizedBoneNode('leftLowerArm');
-                        const RLA0 = vrm.humanoid.getNormalizedBoneNode('rightLowerArm');
-                        const sign = isVRM1 ? -1 : 1;
-                        if (LUA0) LUA0.rotation.z = sign * 1.38;
-                        if (RUA0) RUA0.rotation.z = -sign * 1.38;
-                        if (LLA0) LLA0.rotation.z = sign * 0.05;
-                        if (RLA0) RLA0.rotation.z = -sign * 0.05;
-                        // Guardamos la pose que el propio modelo necesita para
-                        // tener los brazos caídos. Los gestos serán variaciones
-                        // relativas a ella, no poses T fijadas para otro VRM.
-                        gestureSystem.captureRestPose(vrm);
-                    }
-                    hairPhysics.init(vrm);
-                    clothPhysics.init(vrm);
-                    warmAvatarShaders(vrm);
-                    if (avatarAuthenticated) {
-                        window.setAvatarAuthenticated(true);
-                    }
-                },
-                () => {},
-                (err) => {
-                    if (requestId === modelLoadId) console.error('Error cargando VRM:', err);
-                }
-            );
-        }
-
-        window.cargarWaifuEnEscena = cargarWaifu;
-
-        // ══════════════════════════════════════════════════════════════
-        //  EXPRESSION CONTROLLER — Blending suave de expresiones
-        // ══════════════════════════════════════════════════════════════
-        const expressionController = {
-            _targets: {},
-            _current: {},
-            set(name, value, speed = 8) {
-                this._targets[name] = { value: Math.max(0, Math.min(1, value)), speed };
-                if (this._current[name] === undefined) this._current[name] = 0;
-            },
-            setBlink(value, speed = 28) {
-                // Algunos VRM usan un par de párpados y otros un preset único.
-                // Alimentamos ambas convenciones de forma segura; los nombres que
-                // no existan son ignorados por el gestor de expresiones.
-                this.set('blink', value, speed);
-                this.set('blinkLeft', value, speed);
-                this.set('blinkRight', value, speed);
-                this.set('blink_l', value, speed);
-                this.set('blink_r', value, speed);
-            },
-            update(vrm, delta) {
-                if (!vrm || !vrm.expressionManager) return;
-                for (const name in this._targets) {
-                    const t = this._targets[name];
-                    const cur = this._current[name] || 0;
-                    const next = cur + (t.value - cur) * Math.min(1, delta * t.speed);
-                    this._current[name] = next;
-                    try { vrm.expressionManager.setValue(name, next); } catch(e) {}
-                    // Aliases VRM0 ↔ VRM1. Los fonemas se actualizan uno a uno,
-                    // evitando que cinco morphs de boca se sumen a la vez.
-                    const alias = { aa:'a', ih:'i', ou:'u', ee:'e', oh:'o', happy:'joy', relaxed:'neutral' }[name];
-                    if (alias) try { vrm.expressionManager.setValue(alias, next); } catch(e) {}
-                }
-            },
-            reset() { this._targets = {}; this._current = {}; }
-        };
 
         // ══════════════════════════════════════════════════════════════
         //  HAIR PHYSICS — Spring bones procedurales para el pelo
@@ -1554,256 +2306,126 @@
             },
             reset() { this.bones = []; this.hipsPrevY = 0; }
         };
-        // ══════════════════════════════════════════════════════════════
-        //  SPEECH GESTURE SYSTEM — Gestos diferenciados por personalidad
-        //  Nino (tsundere): gestos contenidos, seguros, a media altura
-        //  Miku  (idol):    gestos abiertos, rítmicos, entusiastas
-        //
-        //  Los valores son DELTAS sobre la pose de reposo capturada:
-        //    z > 0 → brazo se acerca al torso (baja)
-        //    z < 0 → brazo se separa del torso (sube) ← usar con mucho cuidado
-        //    x > 0 → brazo hacia delante
-        //    x < 0 → brazo hacia atrás
-        //  La pose de reposo ya tiene sign*1.38 rad en z, así que un delta
-        //  de ±0.30 ya es mucho — no superar ±0.45 para evitar poses rotas.
-        // ══════════════════════════════════════════════════════════════
-        const gestureSystem = {
-            idx: 8,       // 8 = idle relajado (posición neutra por defecto)
-            timer: 0,
-            interval: 2.8,
-            basePose: null,
 
-            captureRestPose(vrm) {
-                if (!vrm?.humanoid) return;
-                this.basePose = {};
-                ['LUA', 'RUA', 'LLA', 'RLA'].forEach((key) => {
-                    const boneName = { LUA: 'leftUpperArm', RUA: 'rightUpperArm', LLA: 'leftLowerArm', RLA: 'rightLowerArm' }[key];
-                    const bone = vrm.humanoid.getNormalizedBoneNode(boneName);
-                    if (bone) this.basePose[key] = { x: bone.rotation.x, y: bone.rotation.y, z: bone.rotation.z };
+        function startAnimationLoop() {
+            if (!avatarAuthenticated || !currentVrm || animationFrameId !== null) return;
+            animationFrameId = requestAnimationFrame(animate);
+        }
+
+        function stopAnimationLoop() {
+            if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+
+        function warmAvatarShaders(vrm) {
+            if (!vrm || typeof renderer.compileAsync !== 'function') return;
+            // Prepara los shaders mientras el canvas permanece oculto durante el acceso.
+            vrm.scene.visible = true;
+            try {
+                renderer.compileAsync(scene, camera).catch(() => {}).finally(() => {
+                    if (currentVrm === vrm && !avatarAuthenticated) vrm.scene.visible = false;
                 });
-            },
-
-            rest(key) {
-                return this.basePose?.[key] || { x: 0, y: 0, z: key.startsWith('L') ? 1.4 : -1.4 };
-            },
-
-            // ── Gestos de NINO (tsundere) ── índices 0–3
-            // Amplitudes pequeñas: Nino es contenida y segura, no exagerada.
-            // Los brazos nunca suben más de ~30° del reposo.
-            gesturesNino: [
-                // 0: Explica con calma — brazo derecho ligeramente adelantado, natural
-                (t, s) => ({
-                    LUA:{z: 0.04, x: 0.01}, RUA:{z:-0.18, x: 0.20},
-                    LLA:{z: 0.02, x: 0.04}, RLA:{z:-0.10, x: 0.28}
-                }),
-                // 1: Reflexiva — brazo izquierdo cruzado en la cintura, derecho quieto
-                (t, s) => ({
-                    LUA:{z: 0.10, x: 0.15}, RUA:{z:-0.08, x: 0.10},
-                    LLA:{z: 0.06, x: 0.18}, RLA:{z:-0.05, x: 0.14}
-                }),
-                // 2: Énfasis — pequeño acento con la muñeca, NO sube el hombro
-                (t, s) => ({
-                    LUA:{z: 0.04, x: 0.02},
-                    RUA:{z:-0.16 + Math.sin(t * 2.8) * 0.04, x: 0.18 + Math.sin(t * 2.8) * 0.03},
-                    LLA:{z: 0.02, x: 0.03},
-                    RLA:{z:-0.09 + Math.sin(t * 2.8) * 0.03, x: 0.24}
-                }),
-                // 3: Cercana pero reservada — ambas manos a la altura de la cadera
-                (t, s) => ({
-                    LUA:{z: 0.08, x: 0.12}, RUA:{z:-0.10, x: 0.14},
-                    LLA:{z: 0.05, x: 0.12}, RLA:{z:-0.07, x: 0.18}
-                }),
-            ],
-
-            // ── Gestos de MIKU (idol alegre) ── más amplios pero siempre humanamente posibles
-            gesturesMiku: [
-                // 0: Bienvenida abierta — ambos brazos a la altura del pecho, simétrico
-                (t, s) => ({
-                    LUA:{z:-0.22 + Math.sin(t * 2.4 + 0.3) * 0.04, x: 0.18},
-                    RUA:{z:-0.22 + Math.sin(t * 2.4) * 0.04,        x: 0.18},
-                    LLA:{z:-0.12, x: 0.14}, RLA:{z:-0.12, x: 0.14}
-                }),
-                // 1: Melodiosa — ola suave y redondeada a media altura
-                (t, s) => ({
-                    LUA:{z:-0.14 + Math.sin(t * 2.0) * 0.05,        x: 0.14},
-                    RUA:{z:-0.18 + Math.sin(t * 2.0 + 0.9) * 0.05,  x: 0.14},
-                    LLA:{z:-0.08, x: 0.10}, RLA:{z:-0.10, x: 0.16}
-                }),
-                // 2: Alegre — ritmo suave de hombros sin exceder el pecho
-                (t, s) => ({
-                    LUA:{z:-0.16 + Math.sin(t * 3.0) * 0.05, x: 0.12},
-                    RUA:{z:-0.16 + Math.sin(t * 3.0 + 0.7) * 0.05, x: 0.12},
-                    LLA:{z:-0.08, x: 0.08}, RLA:{z:-0.08, x: 0.08}
-                }),
-                // 3: Coqueta — mano derecha cerca del hombro, nunca tapa la cara
-                (t, s) => ({
-                    LUA:{z: 0.04, x: 0.06}, RUA:{z:-0.24, x: 0.20},
-                    LLA:{z: 0.02, x: 0.04}, RLA:{z:-0.14, x: 0.26}
-                }),
-            ],
-
-            // ── Idle neutro: brazos caídos, respiración sutil ──
-            idlePose(t) {
-                return {
-                    LUA:{z: 0.010 + Math.sin(t * 1.4) * 0.008, x: Math.sin(t * 0.85) * 0.008},
-                    RUA:{z: 0.010 + Math.sin(t * 1.4 + 0.5) * 0.008, x:-Math.sin(t * 0.85) * 0.008},
-                    LLA:{z: 0.006, x: 0}, RLA:{z: 0.006, x: 0}
-                };
-            },
-
-            update(vrm, delta, time, speaking, waifuName) {
-                if (!vrm || !vrm.humanoid) return;
-                const isNino = waifuName === 'nino';
-                const pool = isNino ? this.gesturesNino : this.gesturesMiku;
-                const poolSize = pool.length;
-
-                if (speaking > 0.1 && !this.wasSpeaking) {
-                    const intentGestures = isNino
-                        ? { explain: 0, playful: 3, reflect: 1, emphatic: 2, warm: 3 }
-                        : { explain: 1, playful: 3, reflect: 1, emphatic: 0, warm: 0 };
-                    this.idx = intentGestures[this.pendingIntent] ?? Math.floor(Math.random() * poolSize);
-                    this.timer = 0;
-                    this.interval = 2.0 + Math.random() * 0.8;
-                    this.pendingIntent = null;
-                }
-                this.wasSpeaking = speaking > 0.1;
-
-                // Mientras habla: rota gestos cada 2-4 s con variación de personalidad
-                if (speaking > 0.1) {
-                    this.timer += delta;
-                    const changeInterval = isNino
-                        ? 2.5 + Math.random() * 1.2   // Nino: gestos firmes, con pausas deliberadas
-                        : 2.2 + Math.random() * 1.3;  // Miku: cadencia alegre sin cambios bruscos
-                    if (this.timer > this.interval) {
-                        this.timer = 0;
-                        this.interval = changeInterval;
-                        let next = this.idx;
-                        while (next === this.idx) next = Math.floor(Math.random() * poolSize);
-                        this.idx = next;
-                    }
-                } else {
-                    this.idx = poolSize; // idle
-                    this.timer = 0;
-                }
-
-                // Elegir pose: idle o gesto activo
-                const g = this.idx >= poolSize
-                    ? this.idlePose(time)
-                    : pool[this.idx](time, speaking);
-
-                const sign = vrm._isVRM1 ? -1 : 1;
-                const bones = {
-                    LUA: vrm.humanoid.getNormalizedBoneNode('leftUpperArm'),
-                    RUA: vrm.humanoid.getNormalizedBoneNode('rightUpperArm'),
-                    LLA: vrm.humanoid.getNormalizedBoneNode('leftLowerArm'),
-                    RLA: vrm.humanoid.getNormalizedBoneNode('rightLowerArm')
-                };
-
-                // Interpolación suave y un peso progresivo: ningún gesto arranca
-                // con el brazo ya levantado al empezar a hablar.
-                const blendSpeed = isNino ? 4.1 : 4.8;
-                const sp  = 1 - Math.exp(-delta * blendSpeed);
-                const spF = 1 - Math.exp(-delta * (blendSpeed + 0.8));
-                const gestureWeight = this.idx >= poolSize ? 1 : THREE.MathUtils.smoothstep(speaking, 0.08, 0.62);
-
-                for (const [key, bone] of Object.entries(bones)) {
-                    if (!bone || !g[key]) continue;
-                    const base = this.rest(key);
-                    const side = key.startsWith('L') ? 1 : -1;
-                    const targetZ = base.z + (g[key].z || 0) * (-side) * sign * gestureWeight;
-                    const targetX = base.x + (g[key].x || 0) * gestureWeight;
-                    bone.rotation.z += (targetZ - bone.rotation.z) * sp;
-                    bone.rotation.x += (targetX - bone.rotation.x) * spF;
-                }
-            },
-            reset() { this.idx = 8; this.timer = 0; this.wasSpeaking = false; this.pendingIntent = null; this.basePose = null; }
-        };
-
-        // ══════════════════════════════════════════════════════════════
-        //  IDLE RESTLESS SYSTEM — Inquietud diferenciada por personalidad
-        //  Nino:  se impacienta, se cruza de brazos, bufidos sutiles
-        //  Miku:  balancea suavemente, mira alrededor con curiosidad
-        // ══════════════════════════════════════════════════════════════
-        const idleRestless = {
-            lastInteraction: Date.now(),
-            phase: 0,
-            actionTimer: 0,
-            actionInterval: 3.2,
-            action: 'none',
-            actionProgress: 0,
-
-            notify() {
-                this.lastInteraction = Date.now();
-                this.phase = 0;
-                this.actionTimer = 0;
-                this.actionInterval = 3.2;
-                this.action = 'none';
-                this.actionProgress = 0;
-            },
-
-            update(delta, isSpeaking, waifuName) {
-                if (isSpeaking) { this.lastInteraction = Date.now(); return { rs: 0, action: 'none', ap: 0, phase: 0 }; }
-                const elapsed = (Date.now() - this.lastInteraction) / 1000;
-                let rs = 0;
-
-                if (elapsed > 24) { rs = Math.min(1, (elapsed - 24) / 10) * 0.9; this.phase = 2; }
-                else if (elapsed > 8) { rs = Math.min(1, (elapsed - 8) / 8) * 0.7; this.phase = 1; }
-                else this.phase = 0;
-
-                this.actionTimer += delta;
-                if (this.actionTimer > this.actionInterval && this.phase >= 1) {
-                    this.actionTimer = 0;
-                    this.actionInterval = 4.5 + Math.random() * 3.0;
-
-                    // Nino se impacienta → acciones más tsundere
-                    // Miku se distrae → acciones más curiosas y suaves
-                    const ninoActions = ['hairTouch', 'armsCross', 'lookAround', 'sigh', 'fidget'];
-                    const mikuActions = ['hairTouch', 'lookAround', 'sway', 'sigh', 'fidget'];
-                    const pool = waifuName === 'nino' ? ninoActions : mikuActions;
-                    this.action = pool[Math.floor(Math.random() * pool.length)];
-                    this.actionProgress = 0;
-                }
-                if (this.action !== 'none') {
-                    this.actionProgress += delta;
-                    if (this.actionProgress > 2.8) { this.action = 'none'; this.actionProgress = 0; }
-                }
-                return { rs, action: this.action, ap: this.actionProgress, phase: this.phase };
+            } catch (_) {
+                if (!avatarAuthenticated) vrm.scene.visible = false;
             }
+        }
+
+        window.setAvatarAuthenticated = function (isAuthenticated) {
+            avatarAuthenticated = isAuthenticated === true;
+            if (!avatarAuthenticated) {
+                document.body.classList.remove('avatar-authenticated');
+                if (currentVrm) currentVrm.scene.visible = false;
+                stopAnimationLoop();
+                return;
+            }
+            if (!currentVrm) {
+                document.body.classList.remove('avatar-authenticated');
+                return;
+            }
+            document.body.classList.add('avatar-authenticated');
+            beginCharacterEntrance(currentVrm, activeWaifuAnim);
+            startAnimationLoop();
         };
 
-        // ── Estado global ──
-        let isSpeaking    = false;
-        let speakingSmooth = 0;
-        let isListening   = false;
-        let listenSmooth  = 0;
-        let speechAttitude = 'neutral';
+        function cargarWaifu(waifuName) {
+            const requestId = ++modelLoadId;
+            const modelConfig = waifuModels[waifuName] || waifuModels.nino;
+            const modelFile = modelConfig.file;
+            loader.load(
+                modelFile,
+                (gltf) => {
+                    const vrm = gltf.userData.vrm;
+                    // Ignore stale responses when the user switches characters quickly.
+                    if (requestId !== modelLoadId) { disposeVrm(vrm); return; }
+                    disposeVrm(currentVrm);
+                    hairPhysics.reset();
+                    clothPhysics.reset();
+                    physicsAccumulator = 0;
+                    animate._warned = false;
+                    currentVrm = vrm;
+                    activeWaifuAnim = waifuName;
+                    vrm.scene.visible = false;
+                    scene.add(vrm.scene);
 
-        // La amplitud real del audio gobierna la apertura de la boca.
-        // smoothingTimeConstant bajo → respuesta más rápida a transientes de voz.
+                    // Detectar si el modelo utiliza convención VRM 1.0 o VRM 0.0 (solo como pista:
+                    // el rig deduce hacia dónde mira el personaje a partir de su propia geometría)
+                    const isVRM1 = (vrm.meta && vrm.meta.metaVersion === '1') || !!(gltf.parser.json?.extensions?.VRMC_vrm);
+                    vrm._isVRM1 = isVRM1;
+
+                    // Rig, ejes del personaje y pose de reposo (brazos caídos, IK)
+                    brain.load(vrm, waifuName);
+                    vrm.scene.rotation.y = brain.rig.frontYaw;
+                    vrm.scene.position.set(0, 0, 0);
+                    frameMobileFace(vrm);
+
+                    // Los ojos siguen a la cámara (con microsacadas y desvíos de mirada)
+                    if (vrm.lookAt) {
+                        vrm.lookAt.target = brain.gazeObj;
+                        vrm.lookAt.autoUpdate = true;
+                    }
+
+                    hairPhysics.init(vrm);
+                    clothPhysics.init(vrm);
+                    warmAvatarShaders(vrm);
+                    if (avatarAuthenticated) {
+                        window.setAvatarAuthenticated(true);
+                    }
+                },
+                () => {},
+                (err) => {
+                    if (requestId === modelLoadId) console.error('Error cargando VRM:', err);
+                }
+            );
+        }
+
+        window.cargarWaifuEnEscena = cargarWaifu;
+
+        // ══════════════════════════════════════════════════════════════
+        //  ANÁLISIS DE VOZ — apertura de boca + vocal dominante por formantes
+        //  Bandas: F1 bajo (250-750 Hz → o/u), F1 alto (750-1450 → a),
+        //  F2 alto (1450-3400 → e/i) y fricativas (3.4-9 kHz → s/f).
+        // ══════════════════════════════════════════════════════════════
         const speechAudio = {
-            context: null,
-            analyser: null,
-            source: null,
-            samples: null,
-            audio: null,
-            level: 0,
-            // Peak suavizado para normalizar el nivel relativo al volumen real del audio
-            peakSmooth: 0.001,
+            context: null, analyser: null, source: null, audio: null,
+            td: null, fd: null, peak: 0.05, sinceSignal: 0, everSignal: false, sinceAttach: 0,
+            minDb: -90, maxDb: -20,
 
             attach(audio) {
+                if (this.audio === audio && this.source) return;
                 this.detach();
                 this.audio = audio;
-                this.peakSmooth = 0.001;
+                this.peak = 0.05; this.sinceSignal = 0; this.everSignal = false; this.sinceAttach = 0;
                 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
                 if (!AudioContextClass) return;
                 try {
                     this.context = this.context || new AudioContextClass();
                     this.analyser = this.context.createAnalyser();
-                    this.analyser.fftSize = 256;
-                    // Valor bajo: el analizador reacciona rápido a cada sílaba.
-                    // Con 0.55 el RMS quedaba aplastado y la boca casi no se movía.
-                    this.analyser.smoothingTimeConstant = 0.25;
-                    this.samples = new Uint8Array(this.analyser.fftSize);
+                    this.analyser.fftSize = 1024;               // ≈21 ms: una sílaba entera, no un puñado de muestras
+                    this.analyser.smoothingTimeConstant = 0.2;
+                    this.analyser.minDecibels = this.minDb;
+                    this.analyser.maxDecibels = this.maxDb;
+                    this.td = new Uint8Array(this.analyser.fftSize);
+                    this.fd = new Uint8Array(this.analyser.frequencyBinCount);
                     this.source = this.context.createMediaElementSource(audio);
                     this.source.connect(this.analyser);
                     this.analyser.connect(this.context.destination);
@@ -1817,82 +2439,76 @@
             detach() {
                 try { this.source?.disconnect(); } catch (_) {}
                 try { this.analyser?.disconnect(); } catch (_) {}
-                this.source = null;
-                this.analyser = null;
-                this.samples = null;
-                this.audio = null;
-                this.level = 0;
-                this.peakSmooth = 0.001;
+                this.source = null; this.analyser = null;
+                this.td = null; this.fd = null; this.audio = null;
+                this.peak = 0.05; this.sinceSignal = 0; this.everSignal = false; this.sinceAttach = 0;
             },
 
-            update(delta, time) {
-                let target = 0;
-                if (isSpeaking) {
-                    if (this.analyser && this.samples) {
-                        this.analyser.getByteTimeDomainData(this.samples);
-                        let energy = 0;
-                        for (const sample of this.samples) {
-                            const centered = (sample - 128) / 128;
-                            energy += centered * centered;
-                        }
-                        const rms = Math.sqrt(energy / this.samples.length);
-                        // Actualizar peak con decaimiento suave → normalización relativa
-                        this.peakSmooth = Math.max(this.peakSmooth * 0.998, rms);
-                        const peak = Math.max(0.012, this.peakSmooth);
-                        // Mapeo con curva de potencia para que sílabas suaves también abran la boca
-                        const normalized = Math.min(1, (rms / peak) * 1.15);
-                        target = Math.pow(normalized, 0.65);
-                        // Umbral mínimo de ruido
-                        if (rms < 0.004) target = 0;
-                    } else {
-                        // Fallback expresivo para navegadores sin Web Audio API
-                        const raw = Math.sin(time * 12) * 0.5 + Math.sin(time * 19) * 0.3
-                                  + Math.sin(time * 7.5) * 0.2;
-                        target = THREE.MathUtils.clamp(0.35 + raw * 0.40, 0.05, 0.85);
-                    }
+            // Devuelve null si no hay análisis fiable → el cerebro usa sílabas sintéticas
+            update(dt, speaking) {
+                if (!speaking) return null;
+                this.sinceAttach += dt;
+                if (!this.analyser || !this.td) return null;
+                this.analyser.getByteTimeDomainData(this.td);
+                let sum = 0;
+                for (let i = 0; i < this.td.length; i++) { const c = (this.td[i] - 128) / 128; sum += c * c; }
+                const rms = Math.sqrt(sum / this.td.length);
+                if (rms > 0.006) { this.sinceSignal = 0; this.everSignal = true; } else this.sinceSignal += dt;
+                // Si el analizador nunca recibe señal (audio de otro origen, etc.) no nos quedamos con la boca quieta
+                if (!this.everSignal && this.sinceAttach > 1.6) return null;
+
+                this.peak = Math.max(this.peak * Math.exp(-dt / 6), rms, 0.03);
+                const level = rms > 0.006 ? clamp01(rms / this.peak) : 0;
+                const open = level > 0 ? clamp01(Math.pow(level, 0.8) * 1.2) : 0;
+
+                this.analyser.getByteFrequencyData(this.fd);
+                const binHz = this.context.sampleRate / this.analyser.fftSize;
+                const span = this.maxDb - this.minDb;
+                let e1 = 0, e2 = 0, e3 = 0, e4 = 0;
+                for (let i = 1; i < this.fd.length; i++) {
+                    const hz = i * binHz;
+                    if (hz < 250) continue;
+                    if (hz > 9000) break;
+                    const mag = Math.pow(10, (this.minDb + (this.fd[i] / 255) * span) / 20);
+                    const en = mag * mag;
+                    if (hz < 750) e1 += en; else if (hz < 1450) e2 += en; else if (hz < 3400) e3 += en; else e4 += en;
                 }
-                // Apertura rápida (sílaba), cierre más suave (coarticulación)
-                const blend = 1 - Math.exp(-delta * (target > this.level ? 28 : 14));
-                this.level += (target - this.level) * blend;
-                return this.level;
+                const voiced = e1 + e2 + e3 + 1e-12;
+                const r1 = e1 / voiced, r2 = e2 / voiced, r3 = e3 / voiced;
+                const fric = rms > 0.012 && e4 > 1.4 * voiced;
+                const v = {
+                    a: 0.15 + r2 * 1.1,
+                    o: r1 * Math.max(0, 1 - r3 * 1.2),
+                    u: Math.max(0, r1 - r2) * 0.6,
+                    e: r3 * 0.9,
+                    i: r3 * 0.5 + 0.05
+                };
+                return { live: true, open, v, fric };
             }
         };
+
+        // ── Estado global y API que usa el resto de la página ──
+        let isSpeaking = false;
+        let isListening = false;
 
         window.setNinoSpeaking = function(val) {
             isSpeaking = val;
             if (!val) speechAudio.detach();
-            if (val) idleRestless.notify();
+            if (val) brain.notify();
             const dot = document.getElementById('status-dot');
             if (dot) { val ? dot.classList.add('speaking') : dot.classList.remove('speaking'); }
         };
         window.setNinoSpeechAudio = function(audio) {
             if (audio) speechAudio.attach(audio);
         };
+        // El texto se divide en frases; cada una recibe su propia actitud
+        // (cálida, curiosa, enfática, tímida, tsundere…) que gobierna gestos, mirada y cara.
         window.setNinoSpeechText = function(text) {
-            const message = String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-            if (/\b(que tal|como estas|hola|encantad|me alegra|genial|increible|feliz|jaja|jeje)\b/.test(message)) {
-                gestureSystem.pendingIntent = 'warm';
-                speechAttitude = 'warm';
-            } else if (/\b(lo siento|entiendo|tranquil|preocup|dificil|aqui estoy|te escucho|animo|cuidate)\b/.test(message)) {
-                gestureSystem.pendingIntent = 'reflect';
-                speechAttitude = 'reflect';
-            } else if (/\b(por que|como|cuando|donde|que opinas|crees que)\b/.test(message) || message.includes('?')) {
-                gestureSystem.pendingIntent = 'reflect';
-                speechAttitude = 'reflect';
-            } else if (/!|\b(oye|basta|claro que|por supuesto|obvio|sin duda|definitivamente)\b/.test(message)) {
-                gestureSystem.pendingIntent = activeWaifuAnim === 'nino' ? 'emphatic' : 'playful';
-                speechAttitude = 'emphatic';
-            } else if (/\b(primero|despues|por ejemplo|significa|consiste|paso|explico|en resumen|porque)\b/.test(message)) {
-                gestureSystem.pendingIntent = 'explain';
-                speechAttitude = 'explain';
-            } else {
-                gestureSystem.pendingIntent = null;
-                speechAttitude = 'neutral';
-            }
+            brain.setSpeechText(text);
         };
         window.setNinoListening = function(val) {
             isListening = val;
-            if (val) idleRestless.notify();
+            if (val) brain.notify();
         };
 
         let previousCameraMobileViewport = mobileViewport.matches;
@@ -1907,15 +2523,9 @@
         });
 
         // ══════════════════════════════════════════════════════════════
-        //  MAIN ANIMATION LOOP — con lógica de personalidad por waifu
+        //  BUCLE PRINCIPAL
         // ══════════════════════════════════════════════════════════════
         const clock = new THREE.Clock();
-        const physicsStep = 1 / 60;
-        let physicsAccumulator = 0;
-        // Parpadeo
-        let blinkTimer = 0, nextBlink = 3.2, isBlinking = false, isDouble = false, doubleStage = 0;
-        // Microexpresiones
-        let microTimer = 0, nextMicro = 4 + Math.random() * 5, microExpr = 'none', microProg = 0;
 
         function animate() {
             animationFrameId = null;
@@ -1923,317 +2533,35 @@
             animationFrameId = requestAnimationFrame(animate);
             const delta = Math.min(clock.getDelta(), 0.05);
             animationElapsed += delta;
-            const time = animationElapsed;
             controls.update();
 
             try {
-                const waifu   = activeWaifuAnim;
-                const isNino  = waifu === 'nino';
-                const isMiku  = waifu === 'miku';
+                const feat = speechAudio.update(delta, isSpeaking);
+                const audio = speechAudio.audio;
+                const progress = (audio && Number.isFinite(audio.duration) && audio.duration > 0)
+                    ? audio.currentTime / audio.duration : -1;
+                brain.update(delta, {
+                    speaking: isSpeaking, listening: isListening,
+                    feat, progress, camera, audioPlaying: isSpeaking
+                });
 
-                // ── Entrada caminando + bounce de Miku ──
-                const isEntering = walkEntrance.update(currentVrm, delta);
-                if (!isEntering) walkEntrance.updateBounce(currentVrm, delta);
-
-                // ── Smooth signals ──
-                speakingSmooth += ((isSpeaking ? 1 : 0) - speakingSmooth) * Math.min(1, delta * 10);
-                listenSmooth   += ((isListening ? 1 : 0) - listenSmooth)  * Math.min(1, delta * 8);
-                const S = speakingSmooth;
-                const L = listenSmooth;
-
-                // ── Idle restless ──
-                const IR = idleRestless.update(delta, isSpeaking || isListening, waifu);
-                const rs = IR.rs;
-
-                // ── Bones ──
-                const hum   = currentVrm.humanoid;
-                const chest = hum?.getNormalizedBoneNode('chest');
-                const head  = hum?.getNormalizedBoneNode('head');
-                const hips  = hum?.getNormalizedBoneNode('hips');
-                const spine = hum?.getNormalizedBoneNode('spine');
-                const neck  = hum?.getNormalizedBoneNode('neck');
-                const RUA   = hum?.getNormalizedBoneNode('rightUpperArm');
-                const RLA   = hum?.getNormalizedBoneNode('rightLowerArm');
-                const LUA   = hum?.getNormalizedBoneNode('leftUpperArm');
-
-                // ── 1. Respiración — diferenciada por personaje ──
-                if (chest) {
-                    if (isNino) {
-                        // Nino: respiración más contenida y tensa al hablar
-                        chest.rotation.x = Math.sin(time*1.7)*0.020 + Math.sin(time*3.2)*0.008
-                                         + Math.sin(time*4.8)*0.028*S + Math.sin(time*2.4)*0.014*rs;
-                        chest.rotation.y = Math.sin(time*1.1)*0.009 + Math.sin(time*2.4)*0.022*S;
-                        chest.rotation.z = Math.sin(time*0.85+1.2)*0.007*rs;
-                    } else {
-                        // Miku: respiración más amplia y rítmica (idol con energía)
-                        chest.rotation.x = Math.sin(time*2.0)*0.028 + Math.sin(time*3.8)*0.011
-                                         + Math.sin(time*5.5)*0.018*S + Math.sin(time*2.8)*0.016*rs;
-                        chest.rotation.y = Math.sin(time*1.4)*0.012 + Math.sin(time*3.0)*0.026*S;
-                        chest.rotation.z = Math.sin(time*1.1+0.8)*0.010*rs + Math.sin(time*2.2)*0.008*S;
-                    }
-                }
-                if (spine) {
-                    spine.rotation.x = Math.sin(time*1.8)*0.008 + Math.sin(time*3.8)*0.013*S;
-                    spine.rotation.z = Math.sin(time*0.7)*0.006*rs
-                                     + (isMiku ? Math.sin(time*1.8)*0.006*S : 0);
-                }
-
-                // ── 2. Cabeza — Nino más orgullosa (mentón arriba), Miku más curiosa ──
-                if (head) {
-                    let hX, hY, hZ;
-                    if (isNino) {
-                        // Nino: ligera inclinación hacia atrás (altiva), movimiento más seco
-                         hX = -0.04 + Math.sin(time*0.75)*0.016
-                           + (Math.sin(time*6.5)*0.030 + Math.sin(time*3.0)*0.018)*S
-                           + Math.sin(time*1.05)*0.032*rs + 0.04*L;
-                        hY = Math.sin(time*0.55)*0.022 + Math.cos(time*0.22)*0.013
-                           + Math.sin(time*2.2)*0.042*S + Math.sin(time*1.7+0.5)*0.072*rs;
-                        hZ = Math.cos(time*0.42)*0.016 + Math.sin(time*3.4)*0.025*S
-                           + Math.sin(time*0.48)*0.011*rs;
-                    } else {
-                        // Miku: inclina la cabeza con curiosidad, más tilting y expresiva
-                         hX = 0.02 + Math.sin(time*0.85)*0.022
-                           + (Math.sin(time*7.2)*0.038 + Math.sin(time*3.4)*0.022)*S
-                           + Math.sin(time*1.15)*0.028*rs + 0.06*L;
-                        hY = Math.sin(time*0.65)*0.030 + Math.cos(time*0.28)*0.018
-                           + Math.sin(time*2.6)*0.055*S + Math.sin(time*2.0+0.6)*0.090*rs;
-                        hZ = Math.cos(time*0.50)*0.022 + Math.sin(time*4.0)*0.035*S
-                           + Math.sin(time*0.55)*0.014*rs;
-                    }
-
-                    if (IR.action === 'lookAround') {
-                        hY += Math.sin(IR.ap*2.2)*0.30;
-                        hX += Math.sin(IR.ap*1.6)*0.08;
-                    }
-                    if (IR.action === 'fidget') hZ += Math.sin(IR.ap*4.2)*0.045;
-                    if (IR.action === 'sway' && isMiku) {
-                        hY += Math.sin(IR.ap*1.8)*0.12;
-                        hZ += Math.sin(IR.ap*2.4)*0.06;
-                    }
-                    if (IR.action === 'armsCross' && isNino) {
-                        // Cuando Nino se cruza de brazos, tuerce un poco la cabeza con orgullo
-                        hY += Math.sin(Math.min(1, IR.ap/2.8)*Math.PI) * 0.10;
-                        hZ += Math.sin(Math.min(1, IR.ap/2.8)*Math.PI) * 0.08;
-                    }
-
-                    // Blending más suave para Miku, más directo para Nino
-                    const headSpeed = isNino ? 5.5 : 7.0;
-                    const headBlend = 1 - Math.exp(-delta * headSpeed);
-                    head.rotation.x += (hX - head.rotation.x) * headBlend;
-                    head.rotation.y += (hY - head.rotation.y) * headBlend;
-                    head.rotation.z += (hZ - head.rotation.z) * headBlend;
-                }
-
-                // ── 3. Cuello ──
-                if (neck) {
-                    neck.rotation.x = Math.sin(time*0.92)*0.006 + 0.010*S;
-                    neck.rotation.y = Math.sin(time*(isNino ? 0.52 : 0.68))*0.012*rs;
-                }
-
-                // ── 4. Caderas — Miku con balanceo rítmico ──
-                if (hips) {
-                    if (isNino) {
-                        hips.rotation.y = Math.sin(time*1.55)*0.014 + Math.sin(time*2.1)*0.018*S
-                                        + Math.sin(time*2.3+0.8)*0.024*rs;
-                        hips.rotation.z = Math.sin(time*1.25+1.0)*0.007*rs;
-                    } else {
-                        // Miku: cadera con ritmo musical suave, incluso en idle
-                        hips.rotation.y = Math.sin(time*1.8)*0.020 + Math.sin(time*2.4)*0.022*S
-                                        + Math.sin(time*2.6+0.9)*0.028*rs
-                                        + Math.sin(time*1.2)*0.009;   // swaying base
-                        hips.rotation.z = Math.sin(time*1.4+0.8)*0.010*rs
-                                        + Math.sin(time*0.9)*0.007;
-                    }
-                    if (IR.action === 'shrug' || IR.action === 'sigh') {
-                        hips.rotation.z += Math.sin(IR.ap*2.8)*0.038;
-                    }
-                    if (IR.action === 'sway' && isMiku) {
-                        hips.rotation.z += Math.sin(IR.ap*2.0)*0.055;
-                        hips.rotation.y += Math.sin(IR.ap*1.8)*0.04;
-                    }
-                }
-
-                // ── 5. Gestos con brazos (solo fuera de la entrada) ──
-                if (!isEntering) gestureSystem.update(currentVrm, delta, time, S, waifu);
-
-                // ── Acción idle: arreglarse el pelo — mano al oído/cuello ──
-                if (IR.action === 'hairTouch' && RUA) {
-                    const c = Math.sin(Math.min(1, Math.max(0, IR.ap / 2.8)) * Math.PI);
-                    const sign = currentVrm._isVRM1 ? -1 : 1;
-                    // El brazo derecho sube moderadamente (a la altura de la oreja),
-                    // no más arriba del hombro. targetZ relativo a reposo (-1.38):
-                    // -0.68 en VRM0 = brazo elevado ~40° por encima del reposo. Natural.
-                    const targetZRUA = -sign * 0.68;
-                    const targetXRUA = 0.28;  // ligeramente hacia adelante
-                    const sp = c * Math.min(1, delta * 4.0);
-                    RUA.rotation.z += (targetZRUA - RUA.rotation.z) * sp;
-                    RUA.rotation.x += (targetXRUA - RUA.rotation.x) * sp;
-                    // Antebrazo: doblar el codo para llevar la mano a la cabeza
-                    if (RLA) RLA.rotation.x += (0.55 - RLA.rotation.x) * sp;
-                }
-
-                // ── Acción tsundere: brazos cruzados (solo Nino) ──
-                if (IR.action === 'armsCross' && isNino && LUA && RUA) {
-                    const c = Math.sin(Math.min(1, Math.max(0, IR.ap / 2.8)) * Math.PI);
-                    const sign = currentVrm._isVRM1 ? -1 : 1;
-                    // Pose de brazos cruzados realista: los codos bajan hacia el torso
-                    // No tan extrema como antes — evita que parezca pose de yoga
-                    LUA.rotation.z += (sign * 0.65 - LUA.rotation.z) * (c * Math.min(1, delta * 3.2));
-                    LUA.rotation.x += (0.45 - LUA.rotation.x) * (c * Math.min(1, delta * 3.2));
-                    RUA.rotation.z += (-sign * 0.65 - RUA.rotation.z) * (c * Math.min(1, delta * 3.2));
-                    RUA.rotation.x += (-0.45 - RUA.rotation.x) * (c * Math.min(1, delta * 3.2));
-                }
-
-                // ── Acción Miku: sway rítmico de brazos (más suave, natural) ──
-                if (IR.action === 'sway' && isMiku && LUA && RUA) {
-                    const c = Math.sin(Math.min(1, IR.ap / 2.8) * Math.PI);
-                    const sign = currentVrm._isVRM1 ? -1 : 1;
-                    // Sway suave: los brazos oscilan a los lados como al bailar
-                    const swayAmplitude = 0.18;
-                    const swayAngle = Math.sin(IR.ap * 1.8) * swayAmplitude;
-                    LUA.rotation.z += (sign * (1.38 - swayAmplitude + swayAngle) - LUA.rotation.z) * (c * Math.min(1, delta * 2.5));
-                    RUA.rotation.z += (-sign * (1.38 - swayAmplitude - swayAngle) - RUA.rotation.z) * (c * Math.min(1, delta * 2.5));
-                    LUA.rotation.x += (swayAngle * 0.12 - LUA.rotation.x) * (c * Math.min(1, delta * 2.5));
-                    RUA.rotation.x += (-swayAngle * 0.12 - RUA.rotation.x) * (c * Math.min(1, delta * 2.5));
-                }
-
-                // ── 6. Lip-sync — gobernado por el nivel real del audio ──
-                // audioLevel es el nivel RMS normalizado de la señal de voz.
-                // S es el suavizado binario (0→1 cuando empieza a hablar).
-                // Combinamos ambos: S abre el canal, audioLevel modula la amplitud.
-                const audioLevel = speechAudio.update(delta, time);
-                if (S > 0.02) {
-                    // Ciclo de vocales realista: aa/oh dominan, ih/ee/ou añaden riqueza
-                    const vw    = (Math.sin(time * 4.8) + 1) * 0.5;
-                    const vowelY = (Math.sin(time * 3.1 + 0.9) + 1) * 0.5;
-
-                    // Apertura máxima proporcional al nivel de audio real
-                    const mouthOpen = audioLevel * S;
-
-                    // Nino: boca más discreta (tsundere no exagera)
-                    // Miku: boca más expresiva y abierta (idol vocaliza más)
-                    const maxOpen = isNino ? 0.78 : 0.92;
-                    const mo = mouthOpen * maxOpen;
-
-                    expressionController.set('aa', mo * (0.72 - vw * 0.28),     20);
-                    expressionController.set('oh', mo * vw * 0.70,               20);
-                    expressionController.set('ih', mo * 0.30 * (1 - vw),         20);
-                    expressionController.set('ee', mo * 0.22 * vowelY,           20);
-                    expressionController.set('ou', mo * 0.18 * (1 - vowelY),     20);
-
-                    if (isNino) {
-                        // Nino al hablar: ligero happy, nunca muy exagerado
-                        // Importante: no mezclar angry con happy (puede deformar ojos)
-                        expressionController.set('happy',   0.18 + S * 0.08, 5);
-                        expressionController.set('relaxed', 0.06,            4);
-                        expressionController.set('angry',   0,               5);  // Resetear para evitar ojos raros
-                    } else {
-                        // Miku al hablar: alegre y radiante
-                        expressionController.set('happy',   0.38 + S * 0.14, 5);
-                        expressionController.set('relaxed', 0.12,            4);
-                        expressionController.set('surprised', 0,             5);  // Resetear para evitar ojos raros
-                    }
-                } else {
-                    expressionController.set('aa',  0, 14);
-                    expressionController.set('oh',  0, 14);
-                    expressionController.set('ih',  0, 14);
-                    expressionController.set('ou',  0, 14);
-                    expressionController.set('ee',  0, 14);
-                    if (isNino) {
-                        expressionController.set('happy',   0.14,  3);
-                        expressionController.set('relaxed', 0.06,  3);
-                        expressionController.set('angry',   0,     3);
-                    } else {
-                        expressionController.set('happy',   0.30,  3);
-                        expressionController.set('relaxed', 0.12,  3);
-                    }
-                }
-
-                // ── 7. Expresiones de estado por personaje ──
-                if (rs > 0.1 && IR.phase === 2) {
-                    if (isNino) {
-                        // Nino aburrrida: cara de pocos amigos
-                        expressionController.set('angry', 0.20*rs,             2);
-                        expressionController.set('sad',   0.10*rs,             2);
-                        expressionController.set('happy', Math.max(0, 0.14-rs*0.14), 3);
-                    } else {
-                        // Miku aburrida: algo melancólica pero sutil
-                        expressionController.set('sad',   0.18*rs,             2);
-                        expressionController.set('happy', Math.max(0, 0.30-rs*0.20), 3);
-                    }
-                } else {
-                    expressionController.set('sad',   0, 3);
-                    if (isNino) expressionController.set('angry', 0, 3);
-                }
-
-                if (IR.action === 'sigh') {
-                    expressionController.set('relaxed', Math.sin(IR.ap*Math.PI/1.1)*0.50, 5);
-                }
-                // surprised solo se activa al escuchar y NUNCA mientras habla
-                // (evita que los ojos queden muy abiertos y raros durante el habla)
-                if (!isSpeaking) {
-                    expressionController.set('surprised', L*(isNino ? 0.22 : 0.35), isListening ? 8 : 5);
-                } else {
-                    expressionController.set('surprised', 0, 8);
-                }
-
-                // ── 8. Microexpresiones — distintas por personaje ──
-                microTimer += delta;
-                if (microTimer > nextMicro && !isSpeaking) {
-                    microTimer = 0; nextMicro = 4 + Math.random() * 7;
-                    // Evitar microexpresiones que afecten a los ojos de forma rara
-                    // 'angry' y 'surprised' solo cuando no hay otras expresiones activas
-                    const ninoMicros  = ['blush', 'relaxed', 'angry', 'surprised'];
-                    const mikuMicros  = ['blush', 'happy', 'relaxed', 'surprised'];
-                    const pool = isNino ? ninoMicros : mikuMicros;
-                    microExpr = pool[Math.floor(Math.random() * pool.length)];
-                    microProg = 0;
-                }
-                if (microExpr !== 'none' && !isSpeaking) {
-                    microProg += delta;
-                    const intensity = isNino ? 0.28 : 0.35;
-                    expressionController.set(microExpr, Math.max(0, Math.sin(microProg*Math.PI/1.4)*intensity), 7);
-                    if (microProg > 1.4) microExpr = 'none';
-                } else if (isSpeaking && microExpr !== 'none') {
-                    // Limpiar microexpresión al empezar a hablar
-                    expressionController.set(microExpr, 0, 6);
-                    microExpr = 'none';
-                }
-
-                // ── 9. Parpadeo orgánico — natural, no interfiere con los ojos al hablar ──
-                blinkTimer += delta;
-                if (!isBlinking && blinkTimer > nextBlink) {
-                    isBlinking = true; blinkTimer = 0;
-                    // Nino: guiño doble menos frecuente. Miku: guiño coqueto más frecuente.
-                    isDouble = Math.random() < (isNino ? 0.18 : 0.30); doubleStage = 0;
-                }
-                if (isBlinking) {
-                    const blinkSpeed = isNino ? 0.12 : 0.10;
-                    const blinkVal = Math.max(0, Math.sin((blinkTimer / blinkSpeed) * Math.PI));
-                    // Usar setBlink que cubre todas las convenciones de nombres VRM0/VRM1
-                    expressionController.setBlink(blinkVal, 36);
-                    if (blinkTimer >= blinkSpeed) {
-                        if (isDouble && doubleStage === 0) { doubleStage = 1; blinkTimer = -0.06; }
-                        else {
-                            expressionController.setBlink(0, 36);
-                            isBlinking = false; blinkTimer = 0;
-                            const baseInterval = isNino ? 3.2 : 2.6;
-                            nextBlink = (baseInterval + Math.random() * 2.8) * (rs > 0.3 ? 0.55 : 1.0);
-                        }
-                    }
-                }
-
-                // Advance spring physics at a steady cadence to avoid frame-rate dependent jitter.
+                // Física secundaria a paso fijo (pelo/ropa) y actualización del VRM.
+                const hum = currentVrm.humanoid;
+                const head = hum?.getNormalizedBoneNode('head');
+                const hips = hum?.getNormalizedBoneNode('hips');
                 physicsAccumulator = Math.min(physicsAccumulator + delta, physicsStep * 3);
+                let steps = 0;
                 while (physicsAccumulator >= physicsStep) {
                     hairPhysics.update(currentVrm, physicsStep, head);
-                    clothPhysics.update(currentVrm, physicsStep, hips, time);
-                    expressionController.update(currentVrm, physicsStep);
+                    clothPhysics.update(currentVrm, physicsStep, hips, animationElapsed);
                     currentVrm.update(physicsStep);
                     physicsAccumulator -= physicsStep;
+                    steps++;
                 }
-
-            } catch(err) {
+                // En pantallas de alta frecuencia puede no tocar paso de física: aun así
+                // hay que volcar la pose a los huesos reales para no ver tirones.
+                if (steps === 0) currentVrm.update(1e-4);
+            } catch (err) {
                 if (!animate._warned) {
                     animate._warned = true;
                     console.warn('[Avatar] Error en el bucle de animación (solo se avisa una vez):', err);
@@ -2244,6 +2572,7 @@
         }
 
         cargarWaifu('nino');
+
     </script>
 
     <!-- Lógica de Interacción en Tiempo Real -->
