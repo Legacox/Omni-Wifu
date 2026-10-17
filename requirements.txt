@@ -4,3 +4,4 @@ edge-tts
 requests
 psycopg[binary]
 supabase
+tzdata
