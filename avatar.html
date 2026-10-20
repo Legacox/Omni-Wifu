@@ -546,6 +546,36 @@
             border-color: #39C5BB;
             box-shadow: 0 8px 24px rgba(57, 197, 187, 0.25);
         }
+        .waifu-card[data-waifu="luna"] .waifu-card-avatar {
+            background: linear-gradient(135deg, rgba(122, 134, 232, 0.18), rgba(167, 139, 250, 0.28));
+            border-color: rgba(122, 134, 232, 0.32);
+        }
+        .waifu-card.active[data-waifu="luna"] {
+            border-color: #7A86E8;
+            box-shadow: 0 8px 24px rgba(122, 134, 232, 0.28);
+        }
+        .waifu-card[data-waifu="luna"] .waifu-card-tag {
+            background: rgba(122, 134, 232, 0.16);
+            color: #4E5AC4;
+        }
+        .waifu-card[data-waifu="luna"] .waifu-card-check {
+            background: #7A86E8;
+        }
+        .waifu-card[data-waifu="mia"] .waifu-card-avatar {
+            background: linear-gradient(135deg, rgba(255, 159, 67, 0.2), rgba(255, 121, 163, 0.28));
+            border-color: rgba(255, 159, 67, 0.34);
+        }
+        .waifu-card.active[data-waifu="mia"] {
+            border-color: #FF8A4C;
+            box-shadow: 0 8px 24px rgba(255, 138, 76, 0.28);
+        }
+        .waifu-card[data-waifu="mia"] .waifu-card-tag {
+            background: rgba(255, 138, 76, 0.16);
+            color: #D9622B;
+        }
+        .waifu-card[data-waifu="mia"] .waifu-card-check {
+            background: #FF8A4C;
+        }
         .waifu-card:hover .waifu-card-avatar {
             transform: scale(1.08);
         }
@@ -872,7 +902,7 @@
         @media (max-width:600px) { .cookie-banner { bottom:10px; padding:16px; } .cookie-actions { display:grid; grid-template-columns:1fr 1fr; } .cookie-action:last-child { grid-column:1 / -1; } .cookie-settings-link { bottom:10px; left:10px; } .legal-info-link { bottom:47px; left:10px; } }
         @media (max-width: 768px) { .profile-toggle-btn { top: 18px; right: 18px; } .profile-panel { top: 18px; right: 18px; max-height: calc(100vh - 36px); } }
         @media (max-width: 380px) { .otp-inputs { gap: 6px; } .otp-digit { width: 40px; height: 46px; } }
-    
+
         /* --- MÓVIL: teclado rápido y campos editables --- */
         .glass-input, .profile-input { -webkit-user-select: text; user-select: text; }
         .glass-input, .glass-send-btn, .glass-mic-btn, .chat-mode-option { touch-action: manipulation; }
@@ -888,6 +918,45 @@
         .profile-legal-row { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 4px; }
         .profile-legal-btn { flex: 1; min-width: 120px; padding: 10px 12px; border: 1px solid rgba(28,28,30,.12); border-radius: 12px; background: rgba(255,255,255,.7); color: #1C1C1E; font: 800 12px 'Plus Jakarta Sans', sans-serif; cursor: pointer; transition: border-color .2s, box-shadow .2s; }
         .profile-legal-btn:hover { border-color: #FF3366; box-shadow: 0 5px 14px rgba(255,51,102,.12); }
+        /* --- Listas de claves (+ / −) --- */
+        .key-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .key-head .profile-label { margin: 0; }
+        .key-add, .key-remove { flex: 0 0 auto; display: grid; place-items: center; border: 0; cursor: pointer; font: 800 18px/1 'Plus Jakarta Sans', sans-serif; transition: transform .15s, background .2s, color .2s; }
+        .key-add { width: 30px; height: 30px; border-radius: 10px; color: #fff; background: #1C1C1E; }
+        .key-add:hover { background: #FF3366; transform: scale(1.06); }
+        .key-remove { width: 30px; height: 30px; border-radius: 10px; color: #d92051; background: rgba(255,51,102,.1); }
+        .key-remove:hover { background: rgba(255,51,102,.2); transform: scale(1.06); }
+        .key-line { display: flex; align-items: center; gap: 7px; }
+        .key-line .password-field { flex: 1; min-width: 0; }
+        .key-row label.key-slot-label { display: block; }
+        .key-link { display: inline-block; margin-top: 9px; font-size: 11px; font-weight: 800; color: #d92051; text-decoration: none; }
+        .key-link:hover { text-decoration: underline; }
+        /* --- Tutorial interactivo --- */
+        .tour-layer { position: fixed; inset: 0; z-index: 300; display: none; }
+        .tour-layer.on { display: block; }
+        .tour-shade { position: fixed; inset: 0; background: rgba(15,15,25,.62); transition: opacity .25s; }
+        .tour-ring { position: fixed; border-radius: 16px; box-shadow: 0 0 0 9999px rgba(15,15,25,.62), 0 0 0 3px #FF3366, 0 0 24px rgba(255,51,102,.55); pointer-events: none; transition: all .28s ease; }
+        .tour-layer.free .tour-shade { pointer-events: none; }
+        .tour-layer.free { pointer-events: none; }
+        .tour-card { position: fixed; z-index: 2; width: min(380px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto; padding: 18px 18px 14px; border-radius: 22px; background: #fff; color: #1C1C1E; box-shadow: 0 18px 50px rgba(0,0,0,.35); font-family: 'Plus Jakarta Sans', sans-serif; pointer-events: auto; }
+        .tour-step { margin: 0 0 4px; font-size: 11px; font-weight: 800; color: #FF3366; letter-spacing: .05em; text-transform: uppercase; }
+        .tour-title { margin: 0 0 7px; font-size: 18px; font-weight: 800; }
+        .tour-text { margin: 0; font-size: 13px; line-height: 1.5; color: rgba(28,28,30,.82); }
+        .tour-text b { color: #1C1C1E; }
+        .tour-links { display: grid; gap: 7px; margin-top: 11px; }
+        .tour-links a { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 12px; border-radius: 12px; text-decoration: none; font-size: 12px; font-weight: 800; color: #1C1C1E; background: rgba(28,28,30,.05); border: 1px solid rgba(28,28,30,.08); }
+        .tour-links a:hover { border-color: #FF3366; background: rgba(255,51,102,.07); }
+        .tour-links a small { font-weight: 700; color: rgba(60,60,67,.6); }
+        .tour-links a.rec { border-color: #FF3366; background: rgba(255,51,102,.08); }
+        .tour-nav { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+        .tour-dots { display: flex; gap: 4px; margin-right: auto; }
+        .tour-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(28,28,30,.15); }
+        .tour-dots i.on { background: #FF3366; }
+        .tour-btn { border: 0; cursor: pointer; padding: 9px 14px; border-radius: 12px; font: 800 12px 'Plus Jakarta Sans', sans-serif; }
+        .tour-btn.primary { color: #fff; background: #1C1C1E; }
+        .tour-btn.primary:hover { background: #FF3366; }
+        .tour-btn.ghost { color: #1C1C1E; background: rgba(28,28,30,.07); }
+        .tour-skip { display: block; margin: 10px auto 0; border: 0; background: none; cursor: pointer; font: 700 11px 'Plus Jakarta Sans', sans-serif; color: rgba(60,60,67,.62); text-decoration: underline; }
     </style>
     <script type="importmap">
         {
@@ -937,7 +1006,7 @@
             <div><div class="profile-username" id="profile-username">Usuario</div><div class="profile-status">● Sesión activa</div></div>
         </div>
         <div class="profile-section">
-            <label class="profile-label" for="tts-provider-select">Motor de voz (TTS Provider)</label>
+            <label class="profile-label" for="tts-provider-select">Motor de voz</label>
             <select class="profile-select" id="tts-provider-select">
                 <option value="gemini" selected>Gemini 3.8 TTS (Voz emotiva nativa con tu API Key de Gemini)</option>
                 <option value="fish">Fish Audio (Voz clonada personalizada de Nino)</option>
@@ -945,7 +1014,7 @@
             </select>
             <p class="profile-help">Elige el sintetizador principal. Si falla o no hay clave, el sistema usará el respaldo de forma automática.</p>
         </div>
-        <div class="profile-section">
+        <div class="profile-section" id="section-chat-model">
             <label class="profile-label" for="chat-provider-select">Modelo de conversación (IA)</label>
             <select class="profile-select" id="chat-provider-select">
                 <option value="gemini" selected>Google Gemini</option>
@@ -957,35 +1026,38 @@
             </select>
             <label class="profile-label" for="chat-model-select">Modelo</label>
             <select class="profile-select" id="chat-model-select"><option value="">Automático (recomendado)</option></select>
-            <div id="provider-key-row" hidden>
-                <label class="profile-label" for="provider-key" id="provider-key-label">Clave API</label>
-                <input class="profile-input" id="provider-key" type="password" autocomplete="off" placeholder="Pega tu API Key">
+            <p class="profile-help" id="chat-model-help">Elige qué IA conversa contigo. Cada IA necesita su propia clave (API key), que pegas más abajo.</p>
+        </div>
+        <div class="profile-section" id="provider-key-row" hidden>
+            <div class="key-head"><label class="profile-label" id="provider-key-label">Claves API</label><button class="key-add" type="button" data-add="provider" title="Añadir otro slot" aria-label="Añadir otro slot">+</button></div>
+            <div class="key-list" id="key-list-provider"></div>
+            <a class="key-link" id="provider-key-link" href="#" target="_blank" rel="noopener noreferrer">Conseguir una clave ↗</a>
+        </div>
+        <div class="profile-section" id="section-keys-gemini">
+            <div class="key-head"><label class="profile-label">Claves API de Gemini (conversación)</label><button class="key-add" type="button" data-add="gemini" title="Añadir otro slot" aria-label="Añadir otro slot">+</button></div>
+            <div class="key-list" id="key-list-gemini"></div>
+            <label class="profile-label" for="active-gemini-slot">Usar primero</label>
+            <select class="profile-select" id="active-gemini-slot"></select>
+            <p class="profile-help">Pulsa + para añadir otro slot y − para quitarlo. Si una clave llega a su límite, se usa la siguiente automáticamente.</p>
+            <a class="key-link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Conseguir una clave gratis en Google AI Studio ↗</a>
+        </div>
+        <div class="profile-section" id="section-keys-voice">
+            <div class="key-head"><label class="profile-label">Claves Gemini solo para la voz</label><button class="key-add" type="button" data-add="voice" title="Añadir otro slot" aria-label="Añadir otro slot">+</button></div>
+            <div class="key-list" id="key-list-voice"></div>
+            <p class="profile-help">Para usar otra IA en el chat (por ejemplo Claude Haiku) con la voz de Gemini. Si las dejas vacías, la voz usa tus claves de Gemini de la conversación.</p>
+        </div>
+        <div class="profile-section" id="section-keys-fish">
+            <div class="key-head"><label class="profile-label">Fish Audio · claves personales</label><button class="key-add" type="button" data-add="fish" title="Añadir otro slot" aria-label="Añadir otro slot">+</button></div>
+            <div class="key-list" id="key-list-fish"></div>
+            <p class="profile-help">Solo hace falta si eliges Fish Audio. Si no hay clave o falla, el sistema usa Gemini TTS o Edge TTS.</p>
+        </div>
+        <div class="profile-section" id="section-help">
+            <label class="profile-label">Ayuda</label>
+            <div class="profile-legal-row">
+                <button class="profile-legal-btn" id="tutorial-replay-btn" type="button">▶ Ver tutorial</button>
             </div>
-            <p class="profile-help" id="chat-model-help">Con Gemini se usan las claves de abajo. Con otro proveedor, pega su clave aquí. La voz puede seguir siendo de Gemini.</p>
         </div>
         <div class="profile-section">
-            <label class="profile-label" for="active-gemini-slot">Clave Gemini en uso</label>
-            <select class="profile-select" id="active-gemini-slot">
-                <option value="1">Slot 1</option><option value="2">Slot 2</option><option value="3">Slot 3</option><option value="4">Slot 4</option><option value="5">Slot 5</option>
-            </select>
-            <p class="profile-help">Puedes alternar el slot activo cuando una clave alcance su cuota.</p>
-            <div id="gemini-key-list">
-                <div class="key-row"><label for="gemini-key-1">Gemini · Slot 1 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-1" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
-                <div class="key-row"><label for="gemini-key-2">Gemini · Slot 2 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-2" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
-                <div class="key-row"><label for="gemini-key-3">Gemini · Slot 3 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-3" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
-                <div class="key-row"><label for="gemini-key-4">Gemini · Slot 4 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-4" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
-                <div class="key-row"><label for="gemini-key-5">Gemini · Slot 5 <small>Opcional</small></label><input class="profile-input gemini-key" id="gemini-key-5" type="password" autocomplete="off" placeholder="Pega tu API Key"></div>
-            </div>
-        </div>
-        <div class="profile-section">
-            <label class="profile-label" for="gemini-voice-key">Gemini · clave solo para la voz</label>
-            <input class="profile-input" id="gemini-voice-key" type="password" autocomplete="off" placeholder="Opcional">
-            <p class="profile-help">Para usar otro modelo de chat (por ejemplo Claude Haiku) con la voz de Gemini. Si la dejas vacía, la voz usa tu clave Gemini en uso.</p>
-        </div>
-        <div class="profile-section">
-            <label class="profile-label" for="fish-key">Fish Audio · clave personal</label>
-            <input class="profile-input" id="fish-key" type="password" autocomplete="off" placeholder="Opcional">
-            <p class="profile-help">Requerida si eliges Fish Audio. Si no hay clave o falla, Nino responderá con Gemini TTS o Edge TTS.</p>
         </div>
         <div class="profile-section">
             <label class="profile-label">Privacidad y cookies</label>
@@ -1057,7 +1129,7 @@
 
     <!-- Botón Flotante para el Panel de Configuración -->
     <button class="config-toggle-btn" id="config-toggle-btn" title="Seleccionar Waifu">👤</button>
-    
+
     <!-- Panel Lateral de Configuración (Liquid Glass & Modern Cards) -->
     <div class="config-panel" id="config-panel">
         <button class="config-close-btn" id="config-close-btn">&times;</button>
@@ -1087,6 +1159,30 @@
                         <span class="waifu-card-tag">Idol Virtual</span>
                     </div>
                     <p class="waifu-card-role">Vocaloid Virtual Diva</p>
+                </div>
+                <div class="waifu-card-check">✓</div>
+            </div>
+
+            <div class="waifu-card" data-waifu="luna" id="card-luna">
+                <div class="waifu-card-avatar">🌙</div>
+                <div class="waifu-card-info">
+                    <div class="waifu-card-title">
+                        <span>Luna</span>
+                        <span class="waifu-card-tag">Kuudere</span>
+                    </div>
+                    <p class="waifu-card-role">Fría por fuera, enamorada por dentro</p>
+                </div>
+                <div class="waifu-card-check">✓</div>
+            </div>
+
+            <div class="waifu-card" data-waifu="mia" id="card-mia">
+                <div class="waifu-card-avatar">🌼</div>
+                <div class="waifu-card-info">
+                    <div class="waifu-card-title">
+                        <span>Mia</span>
+                        <span class="waifu-card-tag">Hiperactiva</span>
+                    </div>
+                    <p class="waifu-card-role">Dulce, nerviosa y enamorada en secreto</p>
                 </div>
                 <div class="waifu-card-check">✓</div>
             </div>
@@ -1217,7 +1313,9 @@
 
         const waifuModels = {
             nino: { file: 'nino_nakano.vrm', frontRotation: Math.PI },
-            miku: { file: 'hatsune_miku.vrm', frontRotation: 0 }
+            miku: { file: 'hatsune_miku.vrm', frontRotation: 0 },
+            luna: { file: 'luna.vrm', frontRotation: Math.PI, matchHeight: true },
+            mia: { file: 'Mia.vrm', matchHeight: true }
         };
 
         //#CORE_BEGIN
@@ -1407,6 +1505,23 @@
                     const front = 0.14 * un;
                     if (f * L < front) f = front / L;
                 }
+                // Falda: por debajo de la cintura la muñeca no puede quedar dentro de un cono que se ensancha hacia el bajo
+                const sk = this.skirt;
+                if (sk && this.pos.spine && this.pos.leftUpperArm) {
+                    const drop = (this.pos.leftUpperArm.y - this.pos.spine.y) + 0.02 * un;   // cintura bajo el hombro
+                    if (h < -drop) {
+                        const R = Math.min(sk.max * un, sk.r0 * un + sk.k * (-h - drop));
+                        const fw = f * L;
+                        if (Math.abs(fw) < R) {
+                            const need = Math.sqrt(R * R - fw * fw);
+                            if (lat < need) o = (need - this.shoulderHalf) / L;
+                        }
+                    }
+                }
+                if (Math.abs(lat) < 0.19 * un && h < 0.03 * un && h > -0.62 * un) {
+                    const front = 0.14 * un;
+                    if (f * L < front) f = front / L;
+                }
                 return [o, u, f];
             }
 
@@ -1519,7 +1634,7 @@
             },
             miku: {
                 // Idol alegre: gestos amplios y rítmicos, cabeza inclinada, se mueve con la música
-                hangBeta: 0.20, ready: [0.20, -0.52, 0.44],
+                hangBeta: 0.22, hangFwd: 0.07, skirt: { r0: 0.15, k: 0.25, max: 0.25 }, ready: [0.20, -0.52, 0.44],
                 walkSpeed: 1.12, stepLen: 0.50, armSwing: 0.48, hipSway: 1.3, bounce: 0.010,
                 postureLean: 0.01, headLean: 0.015, headTilt: 0.03,
                 gestureScale: 1.15, gestureGap: [0.3, 1.1], unitLen: [1.7, 2.8], twoHand: 0.55, beat: 1.25, nod: 1.1,
@@ -1528,27 +1643,51 @@
                 dom: 'right',
                 idle: ['sway', 'hairTouch', 'lookAround', 'clasp', 'sigh'],
                 arrival: 'wave'
+            },
+            mia: {
+                // Hiperactiva, dulce y ansiosa: gestos rápidos y pequeños, mirada inquieta, mueve las manos sin parar
+                hangBeta: 0.19, hangFwd: 0.07, skirt: { r0: 0.16, k: 0.30, max: 0.28 }, ready: [0.16, -0.56, 0.42],
+                walkSpeed: 1.18, stepLen: 0.48, armSwing: 0.42, hipSway: 1.1, bounce: 0.012,
+                postureLean: 0.012, headLean: 0.0, headTilt: 0.035,
+                gestureScale: 1.05, gestureGap: [0.25, 0.9], unitLen: [1.4, 2.4], twoHand: 0.5, beat: 1.3, nod: 1.2,
+                headLambda: 7.5, armLambda: 5.4, breathPeriod: 3.0, breathAmp: 0.024,
+                baseHappy: 0.12, maxHappy: 0.26, eyeContact: 0.58, blinkMean: 2.6, syllRate: 6.0, mouthMax: 1.0,
+                dom: 'right',
+                idle: ['fidget', 'clasp', 'hairTouch', 'lookAround', 'sway'],
+                arrival: 'wave'
+            },
+            luna: {
+                // Kuudere: serena y contenida, gestos mínimos y lentos, mirada que se desvía cuando asoma el cariño
+                hangBeta: 0.30, hangFwd: 0.11, skirt: { r0: 0.17, k: 0.50, max: 0.34 }, ready: [0.10, -0.62, 0.38],
+                walkSpeed: 0.88, stepLen: 0.42, armSwing: 0.22, hipSway: 0.7, bounce: 0,
+                postureLean: -0.006, headLean: -0.02, headTilt: 0.012,
+                gestureScale: 0.62, gestureGap: [1.2, 3.0], unitLen: [2.2, 3.6], twoHand: 0.08, beat: 0.55, nod: 0.45,
+                headLambda: 4.6, armLambda: 3.6, breathPeriod: 4.8, breathAmp: 0.016,
+                baseHappy: 0.0, maxHappy: 0.14, eyeContact: 0.62, blinkMean: 4.4, syllRate: 4.2, mouthMax: 0.85,
+                dom: 'right',
+                idle: ['lookAround', 'armsCross', 'hairTouch', 'fidget', 'sigh'],
+                arrival: 'hairTouch'
             }
         };
 
         // Efecto de la actitud (por frase) sobre postura y cara
         const ATTITUDE = {
             neutral:  { amp: 1.0, beat: 1.0, lean: 0.00, tilt: 0.00, yaw: 0, happy: 0.00, relaxed: 0, angry: 0, blush: 0, away: 1.0,
-                        g: { nino: ['explain', 'list', 'open'], miku: ['explain', 'open', 'list'] } },
+                        g: { nino: ['explain', 'list', 'open'], miku: ['explain', 'open', 'list'], luna: ['explain', 'list'], mia: ['explain', 'open', 'list'] } },
             explain:  { amp: 1.0, beat: 1.1, lean: 0.02, tilt: 0.01, yaw: 0, happy: 0.00, relaxed: 0, angry: 0, blush: 0, away: 0.8,
-                        g: { nino: ['explain', 'list'], miku: ['explain', 'list', 'open'] } },
+                        g: { nino: ['explain', 'list'], miku: ['explain', 'list', 'open'], luna: ['explain', 'list'], mia: ['explain', 'list', 'open'] } },
             warm:     { amp: 1.05, beat: 0.9, lean: 0.02, tilt: 0.07, yaw: 0, happy: 0.10, relaxed: 0.05, angry: 0, blush: 0.22, away: 1.6,
-                        g: { nino: ['chest', 'open', 'shy'], miku: ['open', 'chest', 'cheer'] } },
+                        g: { nino: ['chest', 'open', 'shy'], miku: ['open', 'chest', 'cheer'], luna: ['chest', 'shy', 'hair'], mia: ['chest', 'shy', 'open'] } },
             reflect:  { amp: 0.85, beat: 0.6, lean: 0.015, tilt: 0.08, yaw: 0, happy: 0.00, relaxed: 0.06, angry: 0, blush: 0, away: 2.0,
-                        g: { nino: ['chin', 'explain'], miku: ['chin', 'chest'] } },
+                        g: { nino: ['chin', 'explain'], miku: ['chin', 'chest'], luna: ['chin', 'explain'], mia: ['chin', 'clasp', 'chest'] } },
             curious:  { amp: 1.0, beat: 0.9, lean: 0.03, tilt: 0.11, yaw: 0, happy: 0.03, relaxed: 0, angry: 0, blush: 0, away: 1.1,
-                        g: { nino: ['open', 'explain'], miku: ['open', 'chin', 'explain'] } },
+                        g: { nino: ['open', 'explain'], miku: ['open', 'chin', 'explain'], luna: ['chin', 'explain'], mia: ['open', 'chin', 'explain'] } },
             emphatic: { amp: 1.25, beat: 1.7, lean: 0.03, tilt: 0.00, yaw: 0, happy: 0.05, relaxed: 0, angry: 0.03, blush: 0, away: 0.5,
-                        g: { nino: ['emphatic', 'cross'], miku: ['emphatic', 'cheer', 'open'] } },
+                        g: { nino: ['emphatic', 'cross'], miku: ['emphatic', 'cheer', 'open'], luna: ['explain', 'cross'], mia: ['emphatic', 'cheer', 'open'] } },
             shy:      { amp: 0.75, beat: 0.5, lean: -0.01, tilt: 0.06, yaw: 0, happy: 0.04, relaxed: 0.04, angry: 0, blush: 0.30, away: 2.6,
-                        g: { nino: ['shy', 'hair'], miku: ['shy', 'chest'] } },
+                        g: { nino: ['shy', 'hair'], miku: ['shy', 'chest'], luna: ['shy', 'hair', 'chest'], mia: ['shy', 'clasp', 'hair'] } },
             tsun:     { amp: 1.0, beat: 1.2, lean: -0.02, tilt: -0.03, yaw: 0.22, happy: 0.00, relaxed: 0, angry: 0.06, blush: 0.15, away: 1.4,
-                        g: { nino: ['cross', 'emphatic'], miku: ['emphatic', 'open'] } }
+                        g: { nino: ['cross', 'emphatic'], miku: ['emphatic', 'open'], luna: ['cross', 'explain'], mia: ['emphatic', 'open'] } }
         };
 
         const _noAccents = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -1558,11 +1697,22 @@
             if (isNino && /\b(tch|tonto|idiota|baka|hmph|no es que|no te creas|que pesado|ni se te ocurra)\b/.test(m)) return 'tsun';
             if (/\b(lo siento|entiendo|tranquil|preocup|dificil|aqui estoy|te escucho|animo|cuidate|comprendo)\b/.test(m)) return 'reflect';
             if (/\b(gracias|me alegra|encantad|feliz|genial|increible|cariño|cuenta conmigo|me gusta|jaja|jeje|hola)\b/.test(m)) {
-                return (isNino && /\b(gracias|me gusta|cariño)\b/.test(m)) ? 'shy' : 'warm';
+                return (shyType && /\b(gracias|me gusta|cariño|me importas|quedate|contigo|te quiero)\b/.test(m)) ? 'shy' : 'warm';
             }
             if (/[?¿]/.test(m) || /\b(que opinas|crees que|por que|cuando|donde)\b/.test(m)) return 'curious';
             if (/!|\b(oye|basta|claro que|por supuesto|obvio|sin duda|definitivamente)\b/.test(m)) return 'emphatic';
-            if (/\.\.\.|…|\b(bueno|pues|quiza|tal vez|no se|es que|mmm)\b/.test(m)) return isNino ? 'shy' : 'reflect';
+            const isLuna = name === 'luna';
+            const isMia = name === 'mia';
+            const shyType = isNino || isLuna || isMia;
+            if (isNino && /\b(tch|tonto|idiota|baka|hmph|no es que|no te creas|que pesado|ni se te ocurra)\b/.test(m)) return 'tsun';
+            if (isLuna && /\b(supongo|como quieras|lo que sea|me da igual|no es asunto|no hace falta|no me importa)\b/.test(m)) return 'tsun';
+            if (/\b(lo siento|entiendo|tranquil|preocup|dificil|aqui estoy|te escucho|animo|cuidate|comprendo)\b/.test(m)) return 'reflect';
+            if (/\b(gracias|me alegra|encantad|feliz|genial|increible|cariño|cuenta conmigo|me gusta|jaja|jeje|hola)\b/.test(m)) {
+                return (shyType && /\b(gracias|me gusta|cariño|me importas|quedate|contigo|te quiero)\b/.test(m)) ? 'shy' : 'warm';
+            }
+            if (/[?¿]/.test(m) || /\b(que opinas|crees que|por que|cuando|donde)\b/.test(m)) return 'curious';
+            if (/!|\b(oye|basta|claro que|por supuesto|obvio|sin duda|definitivamente)\b/.test(m)) return 'emphatic';
+            if (/\.\.\.|…|\b(bueno|pues|quiza|tal vez|no se|es que|mmm)\b/.test(m)) return shyType ? 'shy' : 'reflect';
             if (/\b(primero|despues|por ejemplo|significa|consiste|paso|explico|en resumen|porque|ademas)\b/.test(m)) return 'explain';
             return 'neutral';
         }
@@ -1629,6 +1779,7 @@
                 this.P = PERSONA[name] || PERSONA.nino;
                 try { vrm.humanoid.resetNormalizedPose(); } catch (_) {}
                 this.rig = new Rig(vrm);
+                this.rig.skirt = this.P.skirt || null;
                 this.resolveExpressions();
                 this.hang = this.makeHang();
                 this.arms = {};
@@ -1655,7 +1806,7 @@
 
             makeHang() {
                 const b = this.P.hangBeta;
-                return P([Math.sin(b) * 0.975, -Math.cos(b) * 0.975, 0.05], [0.25, 0, -1], [-1, 0.1, 0.35], 0.42, 0);
+                return P([Math.sin(b) * 0.975, -Math.cos(b) * 0.975, this.P.hangFwd || 0.05], [0.25, 0, -1], [-1, 0.1, 0.35], 0.42, 0);
             }
 
             applyRestPose() {
@@ -1760,6 +1911,13 @@
             onArrive() {
                 this.lastInteraction = this.time - 3;
                 this.idleAct = { name: this.P.arrival, t: 0, dur: this.P.arrival === 'wave' ? 2.6 : 2.4, next: rand(7, 10) };
+                try { if (window.onNinoCentered) window.onNinoCentered(this.name); } catch (_) {}
+                this.lastInteraction = this.time - 3;
+                if (startGreetingClip(this.vrm, this.rig, this.name)) {
+                    this.idleAct = { name: 'none', t: 0, dur: 0, next: rand(7, 10) };
+                } else {
+                    this.idleAct = { name: this.P.arrival, t: 0, dur: this.P.arrival === 'wave' ? 2.6 : 2.4, next: rand(7, 10) };
+                }
                 this.gaze.mode = 'cam'; this.gaze.t = 0; this.gaze.hold = rand(1.5, 2.5);
                 this.blink.next = 0.15;
             }
@@ -1846,9 +2004,10 @@
                     case 'shy':     return P_(r.armUnits(side, kp.chest, 0.09, -0.10, 0.09), [0.8, -1, 0.3], [-0.5, 0.6, -0.4], 0.5, 0.1);
                     case 'cheer':   return P_(r.armUnits(side, kp.chin, 0.22, -0.10, 0.07), [0.9, -1, -0.2], [-0.2, 0.3, 0.9], 0.15, -0.1);
                     case 'cross':   // brazos cruzados: el izquierdo por encima y delante del derecho
+                        // Manos sobre el brazo contrario (muñeca apenas pasada la línea media), codos fuera y algo delante.
                         return left
-                            ? P_(r.armUnits(side, kp.belly, -0.12, 0.10, 0.12), [1.0, -1, 0.6], [0, 0.5, -0.8], 0.4, 0.05)
-                            : P_(r.armUnits(side, kp.belly, -0.20, 0.065, 0.065), [1.0, -1, 0.4], [0, 0.5, -0.8], 0.4, 0.05);
+                            ? P_(r.armUnits(side, kp.belly, -0.075, 0.095, 0.080), [1.4, -1, 0.7], [-0.2, -0.45, -0.85], 0.35, 0.02)
+                            : P_(r.armUnits(side, kp.belly, -0.095, 0.030, 0.040), [1.4, -1, 0.5], [-0.2, -0.45, -0.85], 0.35, 0.02);
                     case 'clasp':   return P_(r.armUnits(side, kp.belly, 0.10, 0.03, 0.09), [0.8, -1, 0.3], [-0.4, 0.8, 0.2], 0.5, 0.1);
                     case 'wave':    return P_(r.armUnits(side, kp.chin, 0.30, 0.02, 0.10), [0.5, -1, -0.3], [-0.1, 0.2, 1.0], 0.1, 0);
                     default: return this.ready();
@@ -1876,6 +2035,8 @@
 
             updateDirector(dt, speaking, listening, walking) {
                 const d = this.dir, P = this.P;
+                // Nino mantiene los brazos cruzados; solo los descruza para gesticular al hablar.
+                const crossed = (side) => (this.name === 'nino' ? this.gestureSpec('cross', side) : null);
                 const goalFor = (side) => {
                     // Prioridad: entrada > acción de reposo > habla > escucha > reposo
                     if (walking) return null;
@@ -2098,7 +2259,7 @@
                     const awayP = clamp01((1 - P.eyeContact) * att.away * (this.S > 0.3 ? 1.1 : 0.8) + (this.idleAct.name === 'lookAround' ? 0.9 : 0));
                     if (g.mode === 'cam' && Math.random() < awayP + 0.05) {
                         g.mode = 'away'; g.hold = rand(0.45, 1.1) * (att.away > 1.5 ? 1.4 : 1);
-                        const down = (this.attName === 'shy' || this.attName === 'warm') && this.name === 'nino';
+                        const down = (this.attName === 'shy' || this.attName === 'warm') && (this.name === 'nino' || this.name === 'luna' || this.name === 'mia');
                         const up = this.attName === 'reflect' || this.attName === 'curious';
                         const sx = Math.random() < 0.5 ? -1 : 1;
                         g.tx = sx * rand(0.10, 0.28);
@@ -2135,7 +2296,7 @@
                 let relaxed = att.relaxed * S, angry = att.angry * S, sad = 0, surprised = 0.10 * L, blush = att.blush * S;
                 if (this.idleAct.name === 'sigh') relaxed += Math.sin(clamp01(this.idleAct.t / this.idleAct.dur) * Math.PI) * 0.22;
                 if (this.idleAct.name === 'hairTouch' || this.idleAct.name === 'fidget') blush += 0.18 * Math.sin(clamp01(this.idleAct.t / this.idleAct.dur) * Math.PI);
-                if (restless > 0.05) { if (this.name === 'nino') { angry += 0.10 * restless; sad += 0.05 * restless; happy *= (1 - restless); } else { sad += 0.10 * restless; happy *= (1 - 0.5 * restless); } }
+                if (restless > 0.05) { if (this.name !== 'miku') { angry += 0.10 * restless; sad += 0.05 * restless; happy *= (1 - restless); } else { sad += 0.10 * restless; happy *= (1 - 0.5 * restless); } }
                 const cap = speaking ? P.maxHappy : P.maxHappy + 0.04;
                 happy = clamp(happy, 0, cap);
                 relaxed = clamp(relaxed, 0, 0.18); angry = clamp(angry, 0, 0.14); sad = clamp(sad, 0, 0.12);
@@ -2167,7 +2328,7 @@
                 const em = this.vrm.expressionManager;
                 if (!em) return;
                 const set = (k, v) => { const n = this.ex[k]; if (n) em.setValue(n, clamp01(v)); };
-                set('happy', f.happy); set('relaxed', f.relaxed); set('angry', f.angry); set('sad', f.sad);
+                set('happy', f.happy); set('relaxed', f.relaxed + (this.ex.blush ? 0 : f.blush * 0.7)); set('angry', f.angry); set('sad', f.sad);
                 set('surprised', f.surprised); set('blush', f.blush);
                 set('aa', lp.a); set('oh', lp.o); set('ou', lp.u); set('ee', lp.e); set('ih', lp.i);
                 if (this.ex.blink) set('blink', blinkV); else { set('blinkL', blinkV); set('blinkR', blinkV); }
@@ -2391,6 +2552,62 @@
             startAnimationLoop();
         };
 
+        // ── Saludos con animaciones de Mixamo "Standing Greeting" (convertidas a JSON) ──
+        // Se superponen al sistema procedural con una mezcla suave: solo tronco superior, cuello, cabeza, brazos y dedos.
+        // Las piernas y la cadera siguen siendo del sistema actual, así que los pies no se deslizan.
+        // miku_saludo.json es para Hatsune Miku; saludo_nino_luna.json, para Nino y Luna.
+        const greetDatasets = { miku: null, otros: null };
+        fetch('miku_saludo.json').then(r => r.json()).then(d => { greetDatasets.miku = d; }).catch(() => { /* sin JSON: saludo anterior */ });
+        fetch('saludo_nino_luna.json').then(r => r.json()).then(d => { greetDatasets.otros = d; }).catch(() => { /* sin JSON: saludo anterior */ });
+        const greet = { active: false, t: 0, dur: 0, fps: 30, n: 0, tracks: [] };
+        const _gq = new THREE.Quaternion(), _gq2 = new THREE.Quaternion();
+        function startGreetingClip(vrm, rig, waifuName) {
+            const data = waifuName === 'miku' ? greetDatasets.miku : greetDatasets.otros;
+            if (!data || !vrm || !vrm.humanoid || !rig) return false;
+            const flip = rig.F && rig.F.z < 0;   // VRM 0.x mira hacia -Z: se invierten x y z del cuaternión
+            const tracks = [];
+            for (const [boneName, values] of Object.entries(data.bones)) {
+                const node = vrm.humanoid.getNormalizedBoneNode(boneName);
+                if (node) tracks.push({ node, values, flip });
+            }
+            Object.assign(greet, { active: tracks.length > 0, t: 0, dur: data.duration, fps: data.fps, n: data.frames, tracks });
+            return greet.active;
+        }
+        function applyGreetingClip(dt) {
+            if (!greet.active) return;
+            greet.t += dt;
+            if (greet.t >= greet.dur) { greet.active = false; return; }
+            const s = Math.min(1, greet.t / 0.3, (greet.dur - greet.t) / 0.5);   // entra en 0,3 s y sale en 0,5 s
+            const w = s * s * (3 - 2 * s);
+            const f = Math.min(greet.t * greet.fps, greet.n - 1);
+            const i0 = Math.floor(f), i1 = Math.min(i0 + 1, greet.n - 1), a = f - i0;
+            for (const tr of greet.tracks) {
+                _gq.fromArray(tr.values, i0 * 4);
+                _gq2.fromArray(tr.values, i1 * 4);
+                _gq.slerp(_gq2, a);
+                if (tr.flip) { _gq.x = -_gq.x; _gq.z = -_gq.z; }
+                tr.node.quaternion.slerp(_gq, w);   // de la pose actual del personaje hacia la del clip
+            }
+        }
+
+        // Los modelos no miden lo mismo (Luna es más baja). Se mide la altura de la cabeza de los demás personajes
+        // al cargarlos y los que tienen matchHeight se escalan para llegar a esa misma altura.
+        const HEAD_REF_KEY = 'nino-alturas-cabeza';
+        const headRefs = (() => { try { return JSON.parse(localStorage.getItem(HEAD_REF_KEY) || '{}'); } catch (_) { return {}; } })();
+        function matchModelHeight(vrm, waifuName) {
+            const headY = brain.rig && brain.rig.pos && brain.rig.pos.head ? brain.rig.pos.head.y : 0;
+            if (!headY) return;
+            if (!(waifuModels[waifuName] || {}).matchHeight) {
+                headRefs[waifuName] = headY;
+                try { localStorage.setItem(HEAD_REF_KEY, JSON.stringify(headRefs)); } catch (_) { /* sin almacenamiento */ }
+                return;
+            }
+            const others = Object.entries(headRefs).filter(([k]) => !(waifuModels[k] || {}).matchHeight).map(([, v]) => v);
+            const ref = others.length ? others.reduce((a, b) => a + b, 0) / others.length : 1.38;
+            const scale = Math.min(1.15, Math.max(0.95, ref / headY));
+            if (Math.abs(scale - 1) > 0.01) vrm.scene.scale.setScalar(scale);
+        }
+
         function cargarWaifu(waifuName) {
             const requestId = ++modelLoadId;
             const modelConfig = waifuModels[waifuName] || waifuModels.nino;
@@ -2407,10 +2624,10 @@
                     physicsAccumulator = 0;
                     animate._warned = false;
                     currentVrm = vrm;
+                    greet.active = false;
                     activeWaifuAnim = waifuName;
                     vrm.scene.visible = false;
                     scene.add(vrm.scene);
-
                     // Detectar si el modelo utiliza convención VRM 1.0 o VRM 0.0 (solo como pista:
                     // el rig deduce hacia dónde mira el personaje a partir de su propia geometría)
                     const isVRM1 = (vrm.meta && vrm.meta.metaVersion === '1') || !!(gltf.parser.json?.extensions?.VRMC_vrm);
@@ -2420,6 +2637,7 @@
                     brain.load(vrm, waifuName);
                     vrm.scene.rotation.y = brain.rig.frontYaw;
                     vrm.scene.position.set(0, 0, 0);
+                    matchModelHeight(vrm, waifuName);
                     frameMobileFace(vrm);
 
                     // Los ojos siguen a la cámara (con microsacadas y desvíos de mirada)
@@ -2596,6 +2814,7 @@
                     speaking: isSpeaking, listening: isListening,
                     feat, progress, camera, audioPlaying: isSpeaking
                 });
+                applyGreetingClip(delta);
 
                 // Física secundaria a paso fijo (pelo/ropa) y actualización del VRM.
                 const hum = currentVrm.humanoid;
@@ -2679,14 +2898,10 @@
         const profileCloseBtn = document.getElementById('profile-close-btn');
         const profileUsername = document.getElementById('profile-username');
         const activeGeminiSlot = document.getElementById('active-gemini-slot');
-        const geminiKeyInputs = document.querySelectorAll('.gemini-key');
-        const fishKeyInput = document.getElementById('fish-key');
-        const geminiVoiceKeyInput = document.getElementById('gemini-voice-key');
         const chatProviderSelect = document.getElementById('chat-provider-select');
         const chatModelSelect = document.getElementById('chat-model-select');
         const providerKeyRow = document.getElementById('provider-key-row');
         const providerKeyLabel = document.getElementById('provider-key-label');
-        const providerKeyInput = document.getElementById('provider-key');
         const ttsProviderSelect = document.getElementById('tts-provider-select');
         const profileSaveBtn = document.getElementById('profile-save-btn');
         const profileLogoutBtn = document.getElementById('profile-logout-btn');
@@ -2694,7 +2909,7 @@
         const chatModeOptions = document.querySelectorAll('.chat-mode-option');
 
         // Control accesible para mostrar u ocultar contraseñas y claves privadas.
-        document.querySelectorAll('input[type="password"]').forEach(input => {
+        function enhancePasswordInput(input) {
             const field = document.createElement('div');
             field.className = 'password-field';
             input.parentNode.insertBefore(field, input);
@@ -2716,7 +2931,8 @@
                 toggle.title = showing ? 'Ocultar contraseña' : 'Mostrar contraseña';
             });
             field.appendChild(toggle);
-        });
+        }
+        document.querySelectorAll('input[type="password"]').forEach(enhancePasswordInput);
 
         function syncOtpCode() {
             authCode.value = otpDigits.map(input => input.value).join('');
@@ -2756,6 +2972,8 @@
         let activeWaifu = 'nino';
         let isRecording = false;
         let currentAudio = null;
+        let chatStarted = false;
+        let pendingGreetingUrl = null;
         let latestSpeechRequest = 0;
         let authMode = 'login';
         let authStep = 'credentials';
@@ -2929,6 +3147,20 @@
                 placeholder: 'Escribe a Nino...',
                 tag: 'NINO NAKANO',
                 greeting: 'Tch, hola. ¿Qué quieres? Habla rápido.'
+            },
+            luna: {
+                name: 'Luna',
+                desc: 'Fría, serena y de pocas palabras, con un humor muy seco. Por fuera parece distante, pero en el fondo está enamorada de ti y se le escapa en pequeños detalles.',
+                placeholder: 'Escribe a Luna...',
+                tag: 'LUNA',
+                greeting: 'Hola. Has venido... bien. Dime, ¿qué necesitas?'
+            },
+            mia: {
+                name: 'Mia',
+                desc: 'Hiperactiva, dulce y detallista, se preocupa por todo y se enreda cuando se pone nerviosa. En secreto está enamorada de ti, y a veces se le escapa sin querer.',
+                placeholder: 'Escribe a Mia...',
+                tag: 'MIA',
+                greeting: '¡Hola, hola! ¡Ay, perdona, qué nervios! Soy Mia... ¿Estás bien? ¡Cuéntame todo, con todos los detalles!'
             },
             miku: {
                 name: 'Hatsune Miku',
@@ -3197,6 +3429,88 @@
             authPassword.value = '';
         }
 
+        // ── Listas de claves (cualquier número de slots, con + y −) ──
+        const MAX_KEY_SLOTS = 20;
+        const KEY_LINKS = {
+            gemini: ['Google AI Studio', 'https://aistudio.google.com/apikey'],
+            anthropic: ['Anthropic Console', 'https://console.anthropic.com/settings/keys'],
+            openai: ['OpenAI Platform', 'https://platform.openai.com/api-keys'],
+            groq: ['Groq Console', 'https://console.groq.com/keys'],
+            deepseek: ['DeepSeek Platform', 'https://platform.deepseek.com/api_keys'],
+            mistral: ['Mistral Console', 'https://console.mistral.ai/api-keys']
+        };
+        const keyListBox = name => document.getElementById('key-list-' + name);
+
+        function renumberKeys(name) {
+            keyListBox(name).querySelectorAll('.key-row').forEach((row, i) => {
+                const input = row.querySelector('input');
+                input.id = `key-${name}-${i + 1}`;
+                const label = row.querySelector('label');
+                label.htmlFor = input.id;
+                label.textContent = `API · Slot ${i + 1}`;
+            });
+            if (name === 'gemini') refreshActiveSlotOptions();
+        }
+        function buildKeyRow(name, value) {
+            const row = document.createElement('div');
+            row.className = 'key-row';
+            const label = document.createElement('label');
+            label.className = 'key-slot-label';
+            const line = document.createElement('div');
+            line.className = 'key-line';
+            const input = document.createElement('input');
+            input.className = 'profile-input';
+            input.type = 'password';
+            input.autocomplete = 'off';
+            input.placeholder = 'Pega tu API Key';
+            input.value = value || '';
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'key-remove';
+            remove.textContent = '−';
+            remove.title = 'Quitar este slot';
+            remove.setAttribute('aria-label', 'Quitar este slot');
+            remove.addEventListener('click', () => removeKeyRow(name, row));
+            line.append(input, remove);
+            row.append(label, line);
+            enhancePasswordInput(input);
+            return row;
+        }
+        function renderKeyList(name, values) {
+            const box = keyListBox(name);
+            box.replaceChildren();
+            (values && values.length ? values : ['']).forEach(v => box.appendChild(buildKeyRow(name, v)));
+            renumberKeys(name);
+        }
+        function readKeyList(name) {
+            return Array.from(keyListBox(name).querySelectorAll('input'), input => input.value.trim());
+        }
+        function addKeyRow(name) {
+            const box = keyListBox(name);
+            if (box.querySelectorAll('.key-row').length >= MAX_KEY_SLOTS) return;
+            const row = buildKeyRow(name, '');
+            box.appendChild(row);
+            renumberKeys(name);
+            row.querySelector('input').focus();
+        }
+        function removeKeyRow(name, row) {
+            const box = keyListBox(name);
+            if (box.querySelectorAll('.key-row').length <= 1) { row.querySelector('input').value = ''; return; }
+            row.remove();
+            renumberKeys(name);
+        }
+        document.querySelectorAll('.key-add').forEach(btn => btn.addEventListener('click', () => addKeyRow(btn.dataset.add)));
+        ['gemini', 'voice', 'fish'].forEach(name => renderKeyList(name, ['']));
+
+        function refreshActiveSlotOptions() {
+            const total = keyListBox('gemini').querySelectorAll('.key-row').length;
+            const keep = Number(activeGeminiSlot.value) || 1;
+            activeGeminiSlot.replaceChildren();
+            for (let i = 1; i <= total; i++) activeGeminiSlot.add(new Option(`API · Slot ${i}`, String(i)));
+            activeGeminiSlot.value = String(Math.min(keep, total));
+            activeGeminiSlot.dispatchEvent(new Event('change'));
+        }
+
         // ── Modelos de conversación (el catálogo real lo da el servidor en /api/models) ──
         const chatCatalog = {
             gemini: ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-3.8-flash'],
@@ -3207,7 +3521,8 @@
             mistral: ['mistral-small-latest']
         };
         const chatProviderNames = { gemini: 'Gemini', anthropic: 'Anthropic', openai: 'OpenAI', groq: 'Groq', deepseek: 'DeepSeek', mistral: 'Mistral' };
-        let providerKeys = {};
+        let providerKeyLists = {};
+        let shownProvider = 'gemini';
 
         function populateChatModels(providerId, selectedModel) {
             const models = chatCatalog[providerId] || [];
@@ -3217,20 +3532,20 @@
             chatModelSelect.value = selectedModel || '';
             chatModelSelect.dispatchEvent(new Event('change'));
         }
-
         function syncProviderKeyField() {
             const id = chatProviderSelect.value;
             providerKeyRow.hidden = id === 'gemini';
-            providerKeyLabel.textContent = `${chatProviderNames[id] || id} · clave API`;
-            providerKeyInput.value = providerKeys[id] || '';
+            providerKeyLabel.textContent = `Claves API de ${chatProviderNames[id] || id}`;
+            const link = document.getElementById('provider-key-link');
+            const info = KEY_LINKS[id];
+            if (info) { link.href = info[1]; link.textContent = `Conseguir una clave en ${info[0]} ↗`; }
+            if (id !== 'gemini') renderKeyList('provider', providerKeyLists[id] || ['']);
         }
-
         chatProviderSelect.addEventListener('change', () => {
-            populateChatModels(chatProviderSelect.value, '');
+            if (shownProvider !== 'gemini') providerKeyLists[shownProvider] = readKeyList('provider');
+            shownProvider = chatProviderSelect.value;
+            populateChatModels(shownProvider, '');
             syncProviderKeyField();
-        });
-        providerKeyInput.addEventListener('input', () => {
-            if (chatProviderSelect.value !== 'gemini') providerKeys[chatProviderSelect.value] = providerKeyInput.value;
         });
         fetch('/api/models').then(r => r.json()).then(data => {
             if (data.status !== 'ok') return;
@@ -3244,18 +3559,150 @@
             if (ttsProviderSelect) {
                 ttsProviderSelect.value = nextProfile.tts_provider || 'gemini';
             }
-            activeGeminiSlot.value = String(nextProfile.active_gemini_slot || 1);
-            profileChoiceRefreshers.forEach(refresh => refresh());
-            geminiKeyInputs.forEach((input, index) => { input.value = (nextProfile.gemini_keys || [])[index] || ''; });
-            fishKeyInput.value = nextProfile.fish_key || '';
-            geminiVoiceKeyInput.value = nextProfile.gemini_voice_key || '';
-            providerKeys = { ...(nextProfile.provider_keys || {}) };
+            // Listas (formato nuevo) o, si el servidor es antiguo, las cinco claves fijas
+            const lists = nextProfile.key_lists || {
+                gemini: nextProfile.gemini_keys || [], voice_gemini: [nextProfile.gemini_voice_key || ''], fish: [nextProfile.fish_key || '']
+            };
+            renderKeyList('gemini', lists.gemini);
+            activeGeminiSlot.value = String(nextProfile.gemini_active || nextProfile.active_gemini_slot || 1);
+            refreshActiveSlotOptions();
+            renderKeyList('voice', lists.voice_gemini);
+            renderKeyList('fish', lists.fish);
+            providerKeyLists = {};
+            Object.keys(chatProviderNames).forEach(p => { if (p !== 'gemini' && lists[p]) providerKeyLists[p] = lists[p].slice(); });
             const savedProvider = chatProviderNames[nextProfile.chat_provider] ? nextProfile.chat_provider : 'gemini';
             chatProviderSelect.value = savedProvider;
+            shownProvider = savedProvider;
             populateChatModels(savedProvider, nextProfile.chat_model || '');
             syncProviderKeyField();
             profileChoiceRefreshers.forEach(refresh => refresh());
         }
+
+
+        // ── Tutorial interactivo (se puede saltar y volver a ver desde el perfil) ──
+        const tourLayer = document.createElement('div');
+        tourLayer.className = 'tour-layer';
+        tourLayer.setAttribute('role', 'dialog');
+        tourLayer.setAttribute('aria-label', 'Tutorial');
+        tourLayer.innerHTML = '<div class="tour-shade"></div><div class="tour-ring"></div><div class="tour-card"></div>';
+        document.body.appendChild(tourLayer);
+        const tourShade = tourLayer.querySelector('.tour-shade');
+        const tourRing = tourLayer.querySelector('.tour-ring');
+        const tourCard = tourLayer.querySelector('.tour-card');
+        let tourIndex = 0;
+        let tourActive = false;
+        const tourSeenKey = () => 'nino-tutorial-visto:' + ((profile && profile.username) || '');
+
+        const TOUR_LINKS = [
+            ['Google AI Studio (Gemini)', 'Gratis · recomendada', KEY_LINKS.gemini[1], true],
+            ['Groq', 'Gratis con límites', KEY_LINKS.groq[1], false],
+            ['Mistral', 'Plan gratuito', KEY_LINKS.mistral[1], false],
+            ['Anthropic (Claude Haiku)', 'De pago', KEY_LINKS.anthropic[1], false],
+            ['OpenAI', 'De pago', KEY_LINKS.openai[1], false],
+            ['DeepSeek', 'De pago, muy barata', KEY_LINKS.deepseek[1], false]
+        ];
+
+        const TOUR_STEPS = [
+            { title: '¡Bienvenido a Nino AI!', text: 'Aquí conversas con personajes 3D que te responden con texto y voz. Te enseño en un minuto cómo funciona y cómo conseguir tu <b>API key</b> gratis, que es lo único que necesitas para empezar. Puedes saltar el tutorial cuando quieras.' },
+            { target: '#config-toggle-btn', title: 'Cambia de personaje', text: 'Con este botón eliges con quién hablar: Nino, Miku, Luna o Mia. Cada una tiene su propia personalidad y su voz.' },
+            { target: '#chat-mode-switch', title: 'Tres modos de respuesta', text: '<b>Conversación</b> es charla natural. <b>Pregunta</b> prioriza datos correctos (y puede consultar la hora y el tiempo de donde estás). <b>Automático</b> decide por ti según lo que escribas.' },
+            { target: '.glass-input-bar', title: 'Escribe o habla', text: 'Escribe tu mensaje aquí y pulsa enviar. También puedes usar el micrófono 🎤 de al lado para hablar con voz.', pad: 8 },
+            { target: '#profile-toggle-btn', title: 'Tu perfil', text: 'Aquí guardas tus claves y eliges la IA y la voz. Ahora vamos a abrirlo para configurar tu primera clave.' },
+            { title: 'Consigue tu API key', text: 'Una API key es como una contraseña que permite a la IA responderte. <b>Se crea en la web de cada IA</b> y es personal. Para empezar, la más fácil es <b>Google AI Studio</b>: inicia sesión con tu cuenta de Google, pulsa «Create API key» y copia la clave.', links: true },
+            { target: '#section-chat-model', open: 'profile', title: 'Elige la IA que conversa', text: 'Deja <b>Google Gemini</b> si usas la clave de AI Studio. Si prefieres otra IA, elígela aquí y pegarás su clave en un recuadro nuevo que aparecerá debajo.' },
+            { target: '#section-keys-gemini', open: 'profile', interactive: true, title: 'Pega tu clave aquí', text: 'Pega la clave en el <b>Slot 1</b>. Pulsa <b>+</b> para añadir más slots (por ejemplo, otra cuenta para cuando se agote la cuota) y <b>−</b> para quitar los que no uses. Si una clave se agota, se usa la siguiente sola.' },
+            { target: '#tts-provider-select', open: 'profile', title: 'Elige la voz', text: '<b>Gemini TTS</b> usa tu misma clave de Gemini y es muy expresiva. <b>Edge TTS</b> es gratis y no necesita clave. <b>Fish Audio</b> es una voz clonada que necesita su propia clave. Si una falla, se usa otra automáticamente.' },
+            { target: '#profile-save-btn', open: 'profile', title: 'Guarda los cambios', text: 'Pulsa <b>Guardar cambios</b> para que tus claves queden guardadas en tu cuenta. Después cierra el perfil y escribe tu primer mensaje.' },
+            { title: '¡Todo listo!', text: 'Ya sabes lo básico. Si quieres repetir este tutorial, está en <b>Mi perfil → Ayuda → Ver tutorial</b>.' }
+        ];
+
+        function tourClose(markSeen = true) {
+            tourActive = false;
+            tourLayer.classList.remove('on', 'free');
+            tourRing.style.opacity = '0';
+            if (markSeen) { try { localStorage.setItem(tourSeenKey(), '1'); } catch (e) { /* sin almacenamiento */ } }
+            closeProfilePanel();
+            closeConfigPanel();
+        }
+
+        function tourPlace(step) {
+            const el = step.target ? document.querySelector(step.target) : null;
+            const margin = 12;
+            if (!el) {
+                tourRing.style.opacity = '0';
+                tourShade.style.opacity = '1';
+                tourCard.style.left = '50%'; tourCard.style.top = '50%';
+                tourCard.style.transform = 'translate(-50%, -50%)';
+                return;
+            }
+            tourCard.style.transform = '';
+            tourShade.style.opacity = '0';   // el aro ya oscurece el resto
+            const r = el.getBoundingClientRect();
+            const pad = step.pad || 6;
+            tourRing.style.opacity = '1';
+            tourRing.style.left = (r.left - pad) + 'px'; tourRing.style.top = (r.top - pad) + 'px';
+            tourRing.style.width = (r.width + pad * 2) + 'px'; tourRing.style.height = (r.height + pad * 2) + 'px';
+            const cw = tourCard.offsetWidth, ch = tourCard.offsetHeight;
+            const vw = window.innerWidth, vh = window.innerHeight;
+            let top = r.bottom + pad + margin;
+            if (top + ch > vh - margin) top = r.top - pad - margin - ch;
+            if (top < margin) top = Math.max(margin, vh - ch - margin);
+            let left = r.left + r.width / 2 - cw / 2;
+            left = Math.max(margin, Math.min(left, vw - cw - margin));
+            tourCard.style.left = left + 'px'; tourCard.style.top = top + 'px';
+        }
+
+        function tourRender() {
+            const step = TOUR_STEPS[tourIndex];
+            const last = tourIndex === TOUR_STEPS.length - 1;
+            if (step.open === 'profile') { if (!profilePanel.classList.contains('open')) openProfilePanel(); }
+            else if (profilePanel.classList.contains('open')) closeProfilePanel();
+            if (!step.open && configPanel.classList.contains('open')) closeConfigPanel();
+            tourLayer.classList.toggle('free', !!step.interactive);
+            let links = '';
+            if (step.links) {
+                links = '<div class="tour-links">' + TOUR_LINKS.map(([name, note, url, rec]) =>
+                    `<a class="${rec ? 'rec' : ''}" href="${url}" target="_blank" rel="noopener noreferrer"><span>${name}</span><small>${note} ↗</small></a>`).join('') + '</div>';
+            }
+            const dots = TOUR_STEPS.map((_, i) => `<i class="${i === tourIndex ? 'on' : ''}"></i>`).join('');
+            tourCard.innerHTML =
+                `<p class="tour-step">Paso ${tourIndex + 1} de ${TOUR_STEPS.length}</p><h3 class="tour-title">${step.title}</h3><p class="tour-text">${step.text}</p>${links}` +
+                `<div class="tour-nav"><div class="tour-dots">${dots}</div>` +
+                (tourIndex > 0 ? '<button class="tour-btn ghost" type="button" data-tour="prev">Atrás</button>' : '') +
+                `<button class="tour-btn primary" type="button" data-tour="next">${last ? 'Terminar' : 'Siguiente'}</button></div>` +
+                (last ? '' : '<button class="tour-skip" type="button" data-tour="skip">Saltar tutorial</button>');
+            // el panel se anima al abrirse: se coloca la tarjeta cuando ya está en su sitio
+            tourPlace({});
+            setTimeout(() => {
+                const el = step.target ? document.querySelector(step.target) : null;
+                if (el && step.open === 'profile') el.scrollIntoView({ block: 'center' });
+                tourPlace(step);
+            }, step.open === 'profile' ? 360 : 60);
+        }
+
+        tourCard.addEventListener('click', event => {
+            const action = event.target.closest('[data-tour]')?.dataset.tour;
+            if (!action) return;
+            if (action === 'skip') return tourClose(true);
+            if (action === 'prev') tourIndex = Math.max(0, tourIndex - 1);
+            if (action === 'next') {
+                if (tourIndex >= TOUR_STEPS.length - 1) return tourClose(true);
+                tourIndex += 1;
+            }
+            tourRender();
+        });
+        window.addEventListener('resize', () => { if (tourActive) tourRender(); });
+        document.addEventListener('keydown', event => { if (tourActive && event.key === 'Escape') tourClose(true); });
+
+        function startTour() {
+            if (!profile) return;
+            closeConfigPanel();
+            tourIndex = 0;
+            tourActive = true;
+            tourLayer.classList.add('on');
+            tourRender();
+        }
+        document.getElementById('tutorial-replay-btn').addEventListener('click', () => { closeProfilePanel(); setTimeout(startTour, 250); });
 
         function openProfilePanel() {
             if (!profile) return showAuth();
@@ -3370,9 +3817,11 @@
                 }
 
                 if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo iniciar la sesión.');
+                const cuentaNueva = authStep === 'verify' || authMode === 'register';
                 fillProfile(data.profile);
                 hideAuth();
                 await syncSessionPreference();
+                if (cuentaNueva) setTimeout(startTour, 600);
             } catch (error) {
                 authError.textContent = error.message || 'No se pudo conectar con el servidor.';
             } finally {
@@ -3395,16 +3844,17 @@
             try {
                 const { res, data } = await apiFetch('/api/profile', {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        tts_provider: ttsProviderSelect ? ttsProviderSelect.value : 'gemini',
-                        active_gemini_slot: Number(activeGeminiSlot.value),
-                        gemini_keys: Array.from(geminiKeyInputs, input => input.value),
-                        fish_key: fishKeyInput.value,
-                        gemini_voice_key: geminiVoiceKeyInput.value,
-                        chat_provider: chatProviderSelect.value,
-                        chat_model: chatModelSelect.value,
-                        provider_keys: providerKeys
-                    })
+                    body: JSON.stringify((() => {
+                        if (shownProvider !== 'gemini') providerKeyLists[shownProvider] = readKeyList('provider');
+                        const key_lists = { gemini: readKeyList('gemini'), voice_gemini: readKeyList('voice'), fish: readKeyList('fish'), ...providerKeyLists };
+                        return {
+                            tts_provider: ttsProviderSelect ? ttsProviderSelect.value : 'gemini',
+                            gemini_active: Number(activeGeminiSlot.value) || 1,
+                            key_lists,
+                            chat_provider: chatProviderSelect.value,
+                            chat_model: chatModelSelect.value
+                        };
+                    })())
                 });
                 if (res.status === 401) return showAuth();
                 if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudieron guardar los cambios.');
@@ -3481,6 +3931,8 @@
             }
 
             // Saludo inicial de la nueva Waifu
+            chatStarted = false;
+            pendingGreetingUrl = null;
             setNinoMessage(details.greeting);
 
             // Cambiar modelo en la escena de Three.js
@@ -3501,6 +3953,40 @@
             void mangaBubble.offsetWidth;
             mangaBubble.style.animation = 'mangaPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
         }
+
+        // Al llegar al centro, el personaje dice en voz alta su primera frase (la que aparece antes de que escribas).
+        function armPendingGreeting() {
+            const resume = () => {
+                document.removeEventListener('pointerdown', resume, true);
+                document.removeEventListener('keydown', resume, true);
+                const url = pendingGreetingUrl;
+                pendingGreetingUrl = null;
+                if (url && !chatStarted) reproducirAudio(url);
+            };
+            document.addEventListener('pointerdown', resume, { capture: true, once: true });
+            document.addEventListener('keydown', resume, { capture: true, once: true });
+        }
+        async function speakGreeting(waifu) {
+            const details = waifuDetails[waifu];
+            if (!details || !profile || chatStarted) return;
+            const requestId = ++latestSpeechRequest;
+            try {
+                const { res, data } = await apiFetch('/api/greet', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ waifu, text: details.greeting })
+                });
+                if (!res.ok || data.status !== 'ok') return;
+                if (requestId !== latestSpeechRequest || waifu !== activeWaifu || chatStarted) return;
+                if (window.setNinoSpeechText) window.setNinoSpeechText(details.greeting);
+                // Si el navegador bloquea el audio (aún no has tocado la página), suena en cuanto hagas clic o pulses una tecla.
+                const blocked = () => { pendingGreetingUrl = data.audio_url || null; if (data.audio_url) armPendingGreeting(); };
+                if (data.audio_url) reproducirAudio(data.audio_url, blocked);
+                else if (data.speech_job_id) consultarAudio(data.speech_job_id, waifu, requestId, blocked);
+            } catch (_) { /* sin saludo hablado */ }
+        }
+        window.onNinoCentered = function (name) {
+            if (name === activeWaifu) speakGreeting(name);
+        };
 
         function setNinoMessage(msg) {
             stopCompactTranscript();
@@ -3532,7 +4018,7 @@
             userWhisper.classList.add('visible');
         }
 
-        function reproducirAudio(url) {
+        function reproducirAudio(url, onBlocked) {
             if (!url) return;
 
             // Detener audio anterior si existe
@@ -3576,6 +4062,7 @@
 
             audio.play().catch(() => {
                 // Autoplay bloqueado por el navegador (requiere interacción previa del usuario)
+                if (typeof onBlocked === 'function') onBlocked();
                 if (window.setNinoSpeaking) window.setNinoSpeaking(false);
                 stopCompactTranscript();
                 if (isCompactMobile()) showCompactTranscript(0);
@@ -3595,7 +4082,7 @@
             }
         }
 
-        async function consultarAudio(jobId, waifu, requestId) {
+        async function consultarAudio(jobId, waifu, requestId, onBlocked) {
             const limite = Date.now() + 120000;
             while (Date.now() < limite && requestId === latestSpeechRequest && waifu === activeWaifu) {
                 try {
@@ -3604,7 +4091,7 @@
                     const audioData = await res.json();
                     if (audioData.status === 'ok') {
                         if (audioData.audio_url && requestId === latestSpeechRequest && waifu === activeWaifu) {
-                            reproducirAudio(audioData.audio_url);
+                            reproducirAudio(audioData.audio_url, onBlocked);
                         }
                         return;
                     }
@@ -3612,7 +4099,7 @@
                 } catch (_) {
                     return;
                 }
-                await new Promise(resolve => setTimeout(resolve, 800));
+                await new Promise(resolve => setTimeout(resolve, 150));
             }
         }
 
@@ -3647,6 +4134,8 @@
         async function enviarTexto(customText = null) {
             const texto = customText ? customText.trim() : chatInput.value.trim();
             if (!texto) return;
+            chatStarted = true;
+            pendingGreetingUrl = null;
 
             if (!customText) chatInput.value = '';
             setUserMessage(texto);

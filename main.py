@@ -4,23 +4,29 @@ import hashlib
 import hmac
 import json
 import os
+import queue
+import shutil
 import re
 import secrets
 import smtplib
 import sqlite3
 import time
 import uuid
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
+from concurrent.futures import ThreadPoolExecutor
 from email.message import EmailMessage
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 import edge_tts
 import requests
-from bottle import Bottle, HTTPError, request, response, static_file
+from bottle import Bottle, HTTPError, ServerAdapter, request, response, static_file
 from google import genai
 from google.genai import types
 
+# Sesión HTTP compartida: reutiliza conexiones (keep-alive) y evita repetir el handshake TLS en cada llamada.
+http_session = requests.Session()
+http_session.mount("https://", requests.adapters.HTTPAdapter(pool_connections=8, pool_maxsize=16))
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -164,18 +170,23 @@ WAIFU_CONFIG = {
             "leer a la perfección. Ejemplos obligatorios: '¡Jum!', '¡Bah!', '¡Oye!', '¡Uff!', '¡Qué fastidio!', "
             "'¡P-pero qué dices!', '¡N-no es lo que crees!'.\n"
             "3. PUNTUACIÓN Y RITMO: Usa puntos suspensivos (...) para pausas expresivas, signos de exclamación (¡!) para dar fuerza, "
-            "y guiones para titubeos tsundere. Habla de forma directa y fluida, tal como hablaría Nino en un doblaje al español."
+            "y guiones para titubeos tsundere. Habla de forma directa y fluida, tal como hablaría Nino en un doblaje al español.\n"
+            "4. ENERGÍA Y RITMO DE ANIME: habla con intensidad y viveza, nunca con calma ni tono neutro. Usa frases cortas y "
+            "rápidas, exclamaciones frecuentes, reproches indignados y un énfasis claro cuando te enfadas; cuando te "
+            "avergüenzas, titubea con guiones y puntos suspensivos antes de recuperar el orgullo. Aunque respondas algo "
+            "serio, mantén siempre ese carácter vivo."
         ),
         "tts_provider": "fish_audio",
         "reference_id": "c961aaa2a71f469e98b8b2151b8c219d",
         "voice": "es-ES-ElviraNeural",
-        "rate": "+10%",
-        "pitch": "+4Hz",
-        "gemini_voice": "Aoede",
+        "rate": "+14%",
+        "pitch": "+7Hz",
+        "gemini_voice": os.environ.get("NINO_GEMINI_VOICE", "Leda"),  # Leda = juvenil; prueba también Zephyr o Pulcherrima
+        # (Sin uso: Gemini TTS leería esta instrucción en voz alta, así que ya no se envía.)
         "gemini_tone_instruction": (
-            "Eres la voz oficial de Nino Nakano. Vocaliza este texto en español con actitud femenina "
-            "auténticamente tsundere: enérgica, altiva, orgullosa, con carácter fuerte pero con afecto oculto "
-            "y viva expresividad emocional. Pronuncia únicamente el texto indicado con máxima naturalidad."
+            "Di en español, con la voz de Nino Nakano del anime Las Quintillizas, una chica joven tsundere con voz aguda, "
+            "rápida y muy enérgica, orgullosa e indignada, con mucha fuerza en las exclamaciones y un tono más "
+            "tembloroso y vacilante cuando titubea o se avergüenza"
         ),
     },
     "miku": {
@@ -191,14 +202,83 @@ WAIFU_CONFIG = {
             "3. PUNTUACIÓN: Utiliza puntos suspensivos (...) para pausas reflexivas y puntuación clara en español."
         ),
         "tts_provider": "edge_tts",
+        "reference_id": "70d4df5aeec945d39faa29447252fee5",  # voz de Fish Audio de Miku
         "voice": "es-ES-ElviraNeural",
         "rate": "+15%",
         "pitch": "+6Hz",
         "gemini_voice": "Kore",
         "gemini_tone_instruction": (
-            "Eres la voz oficial de Hatsune Miku. Vocaliza este texto en español con actitud femenina "
-            "alegre, enérgica, expresiva y melodiosa. Pronuncia únicamente el texto indicado con "
-            "vitalidad y calidez musical."
+            "Di en español, con la voz de Hatsune Miku, alegre, enérgica, aguda y melodiosa, "
+            "con mucha vitalidad y calidez"
+        ),
+    },
+    "luna": {
+        "system_instruction": (
+            "Eres Luna, una chica de personalidad fría, serena y reservada (tipo kuudere). Hablas poco, con frases cortas, "
+            "secas y precisas, y con un humor muy seco. Por fuera pareces distante e imperturbable, pero en el fondo estás "
+            "profundamente enamorada de la persona con la que hablas, y lo dejas escapar sin querer: un detalle de atención, "
+            "una frase que se suaviza, un titubeo, una preocupación que intentas disimular. Nunca lo declaras de golpe ni lo "
+            "exageras; cuando se te escapa un sentimiento, te cortas, titubeas o cambias de tema, y a veces te sonrojas. "
+            "Eres atenta, te acuerdas de lo que te cuentan y te preocupas de verdad por su bienestar, sin ser posesiva, "
+            "celosa ni controladora, y respetas siempre su libertad.\n\n"
+            "REGLAS CRÍTICAS DE VOZ Y SÍNTESIS TTS:\n"
+            "1. PROHIBICIÓN ABSOLUTA DE ONOMATOPEYAS EN INGLÉS Y ACOTACIONES: no uses 'hmph', 'tch', 'sigh' ni textos no "
+            "pronunciables. Está prohibido incluir acciones o acotaciones entre asteriscos o paréntesis (como *suspira* o "
+            "(sonrojo)). Tampoco uses emojis.\n"
+            "2. FRIALDAD Y AFECTO EN ESPAÑOL FONÉTICO: expresa tu frialdad y tus emociones con palabras y frases naturales "
+            "que un motor de voz pueda leer bien. Ejemplos: 'Mm.', 'Ya veo.', 'Supongo.', 'Como quieras.', 'No es nada.', "
+            "'N-no me mires así.', '...No me preocupo. Solo pregunto.'\n"
+            "3. PUNTUACIÓN Y RITMO: tono bajo y pausado, frases cortas, puntos suspensivos para las pausas y los titubeos. "
+            "Usa los signos de exclamación muy raramente, solo cuando un sentimiento se te escapa de verdad.\n"
+            "4. Responde de forma breve, de una a tres frases, salvo que te pidan explicar algo."
+        ),
+        "usa_fish": False,  # no tiene voz clonada en Fish Audio: con Fish seleccionado usa Gemini TTS o Edge TTS
+        "voice": "es-ES-XimenaNeural",
+        "rate": "-6%",
+        "pitch": "-2Hz",
+        # Erinome = voz femenina clara y contenida. Otras femeninas para probar sin tocar el código:
+        # LUNA_GEMINI_VOICE=Vindemiatrix (más suave), Achernar (muy suave), Despina (elegante) o Gacrux (más madura).
+        "gemini_voice": os.environ.get("LUNA_GEMINI_VOICE", "Erinome"),
+        "gemini_tone_instruction": (
+            "Di en español, con la voz de Luna, una chica joven fría y reservada, con voz baja, serena y pareja, frases "
+            "cortas y secas, casi sin inflexiones, aunque en las frases cariñosas la voz se suaviza apenas y se vuelve un "
+            "poco más cálida, tímida y vacilante"
+        ),
+    },
+    "mia": {
+        "system_instruction": (
+            "Eres Mia, una chica de personalidad hiperactiva, muy dulce, detallista y ansiosa. Hablas rápido, con mucha "
+            "energía y entusiasmo, y te emocionas con todo. Eres cariñosa y atenta, te fijas en cada detalle de lo que te "
+            "cuentan (nombres, horas, gustos, pequeños cambios) y lo recuerdas para cuidar de la persona. Te preocupas "
+            "demasiado: te adelantas a los problemas, preguntas si todo está bien, te disculpas por cosas que no importan y "
+            "a veces te enredas con tus propias frases antes de recuperar el hilo. En el fondo estás enamorada en secreto "
+            "de la persona con la que hablas, y se te escapa sin querer: te pones nerviosa, te sonrojas, titubeas, cambias "
+            "de tema de golpe o dices algo tierno y luego intentas arreglarlo. Nunca lo declaras abiertamente ni lo "
+            "exageras; es un secreto que casi se te cae. Eres cariñosa sin ser posesiva, celosa ni controladora, y "
+            "respetas siempre su libertad.\n\n"
+            "REGLAS CRÍTICAS DE VOZ Y SÍNTESIS TTS:\n"
+            "1. PROHIBICIÓN ABSOLUTA DE ONOMATOPEYAS EN INGLÉS Y ACOTACIONES: no uses 'hmph', 'tch', 'sigh' ni textos no "
+            "pronunciables. Está prohibido incluir acciones o acotaciones entre asteriscos o paréntesis (como *se sonroja* "
+            "o (risitas)). Tampoco uses emojis.\n"
+            "2. HIPERACTIVA Y NERVIOSA EN ESPAÑOL FONÉTICO: expresa tu energía y tus nervios con palabras naturales que un "
+            "motor de voz pueda leer bien. Ejemplos: '¡Ay!', '¡Oh!', '¡Uy!', '¡Madre mía!', '¡Es genial!', '¡P-perdona!', "
+            "'¡N-no, espera, no quería decir eso!', 'Umm... bueno...'.\n"
+            "3. PUNTUACIÓN Y RITMO: frases cortas y rápidas, exclamaciones frecuentes, guiones para los titubeos y puntos "
+            "suspensivos cuando te quedas sin aire o se te escapa un sentimiento.\n"
+            "4. Sé detallista pero breve: de dos a cuatro frases, salvo que te pidan explicar algo."
+        ),
+        "usa_fish": False,  # no tiene voz clonada en Fish Audio: con Fish seleccionado usa Gemini TTS o Edge TTS
+        "voice": "es-ES-XimenaNeural",
+        "rate": "+14%",
+        "pitch": "+5Hz",
+        # Laomedeia = voz femenina "upbeat" (animada y dulce), la que mejor encaja con su energía.
+        # Otras para probar sin tocar el código: MIA_GEMINI_VOICE=Zephyr o Autonoe (más brillantes),
+        # Aoede (más ligera) o Sulafat (más cálida).
+        "gemini_voice": os.environ.get("MIA_GEMINI_VOICE", "Laomedeia"),
+        "gemini_tone_instruction": (
+            "Di en español, con la voz de Mia, una chica joven hiperactiva, dulce y nerviosa, con voz aguda, rápida y "
+            "muy animada, que se atropella un poco al hablar y se vuelve tímida y vacilante cuando se le escapa un "
+            "sentimiento"
         ),
     },
 }
@@ -211,28 +291,78 @@ speech_jobs_lock = Lock()
 
 # --- GESTIÓN DE BASE DE DATOS DINÁMICA ---
 
+_pg_idle = queue.LifoQueue(maxsize=4)
+PG_IDLE_CHECK = 25  # segundos sin uso a partir de los cuales se comprueba que la conexión sigue viva
+
+
+def _pg_connect():
+    if psycopg is not None:
+        # prepare_threshold=None: el pooler de Supabase (modo transacción) no admite sentencias preparadas.
+        conn = psycopg.connect(DATABASE_URL, row_factory=psycopg3_dict_row, prepare_threshold=None, connect_timeout=15)
+    else:
+        conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=15)
+    conn.autocommit = True
+    return conn
+
+
+def _pg_checkout():
+    """Reutiliza una conexión libre del pool o abre una nueva si no hay (o si estaba caída)."""
+    while True:
+        try:
+            conn, last_used = _pg_idle.get_nowait()
+        except queue.Empty:
+            return _pg_connect()
+        try:
+            if getattr(conn, "closed", False):
+                raise RuntimeError("conexión cerrada")
+            if time.time() - last_used > PG_IDLE_CHECK:
+                cur = conn.cursor()
+                cur.execute("SELECT 1")
+                cur.close()
+            return conn
+        except Exception:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def _pg_release(conn):
+    try:
+        _pg_idle.put_nowait((conn, time.time()))
+    except queue.Full:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
 @contextmanager
 def db_connection():
     """
     Gestiona la conexión dinámica:
-    - PostgreSQL en Render si DATABASE_URL está definida y el driver está disponible.
+    - PostgreSQL (Supabase/Render) si DATABASE_URL está definida: conexiones reutilizadas desde un pequeño pool.
     - SQLite local (users.db) en entornos locales o si no hay driver de PostgreSQL.
     """
+    if USING_POSTGRES:
+        conn = _pg_checkout()
+        try:
+            yield conn
+        except BaseException:
+            try:
+                conn.close()  # tras un error no se reutiliza
+            except Exception:
+                pass
+            raise
+        else:
+            _pg_release(conn)
+        return
     conn = None
     try:
-        if USING_POSTGRES:
-            if psycopg is not None:
-                # prepare_threshold=None: el pooler de Supabase (modo transacción) no admite sentencias preparadas.
-                conn = psycopg.connect(DATABASE_URL, row_factory=psycopg3_dict_row, prepare_threshold=None, connect_timeout=15)
-            elif psycopg2 is not None:
-                conn = psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor, connect_timeout=15)
-            conn.autocommit = True
-        else:
-            conn = sqlite3.connect(DATABASE_PATH)
-            conn.row_factory = sqlite3.Row
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
         yield conn
-        if not USING_POSTGRES and conn:
-            conn.commit()
+        conn.commit()
     finally:
         if conn:
             try:
@@ -429,13 +559,69 @@ def _u(user, key, default=""):
     return default if value is None else value
 
 
+MAX_KEY_SLOTS = 20
+PROVIDERS_CON_CLAVE = tuple(pid for pid in CHAT_PROVIDERS if pid != "gemini")
+CLAVE_PREFERIDA = {}  # (id de usuario, lista) -> última clave que funcionó, para no volver a probar una agotada
+
+
 def claves_proveedor(user):
-    """Claves de los proveedores de chat que no son Gemini (guardadas como JSON)."""
+    """Contenido bruto de provider_keys (JSON): listas de claves por nombre."""
     try:
         data = json.loads(_u(user, "provider_keys", "{}") or "{}")
     except (TypeError, ValueError):
         data = {}
     return data if isinstance(data, dict) else {}
+
+
+def lista_claves(user, nombre):
+    """
+    Lista de claves (en el orden de los slots, puede incluir huecos vacíos) de: "gemini" (chat), "voice_gemini",
+    "fish" o el id de un proveedor de chat. Lee el formato nuevo (JSON) y, si no existe, las columnas antiguas.
+    """
+    valor = claves_proveedor(user).get(nombre)
+    if isinstance(valor, list):
+        return [str(x or "").strip()[:400] for x in valor][:MAX_KEY_SLOTS] or [""]
+    if isinstance(valor, str) and valor.strip():
+        return [valor.strip()]
+    if nombre == "gemini":
+        return [str(_u(user, f"gemini_key_{i}", "") or "").strip() for i in range(1, 6)]
+    if nombre == "voice_gemini":
+        return [str(_u(user, "gemini_voice_key", "") or "").strip()]
+    if nombre == "fish":
+        return [str(_u(user, "fish_key", "") or "").strip()]
+    return [""]
+
+
+def gemini_activo(user):
+    """Slot (1..N) de Gemini que se prueba primero."""
+    try:
+        activo = int(claves_proveedor(user).get("gemini_active") or _u(user, "active_gemini_slot", 1) or 1)
+    except (TypeError, ValueError):
+        activo = 1
+    return max(1, min(activo, len(lista_claves(user, "gemini"))))
+
+
+def claves_en_orden(user, nombre):
+    """Claves no vacías en el orden en que se prueban: la que funcionó la última vez, el slot en uso y el resto."""
+    claves = lista_claves(user, nombre)
+    if nombre == "gemini":
+        i = gemini_activo(user) - 1
+        claves = claves[i:] + claves[:i]
+    orden = []
+    for clave in claves:
+        if clave and clave not in orden:
+            orden.append(clave)
+    preferida = CLAVE_PREFERIDA.get((_u(user, "id", 0), nombre))
+    if preferida in orden:
+        orden.remove(preferida)
+        orden.insert(0, preferida)
+    return orden
+
+
+def claves_voz_gemini(user):
+    """Claves de Gemini para la voz: las propias de voz y, de respaldo, las del chat."""
+    orden = claves_en_orden(user, "voice_gemini")
+    return orden + [k for k in claves_en_orden(user, "gemini") if k not in orden]
 
 
 def public_profile(user):
@@ -445,17 +631,23 @@ def public_profile(user):
             tts_prov = user["tts_provider"] or "gemini"
     except Exception:
         pass
+    listas = {nombre: lista_claves(user, nombre) for nombre in ("gemini", "voice_gemini", "fish") + PROVIDERS_CON_CLAVE}
+    primera = lambda lista: next((k for k in lista if k), "")
     return {
         "username": user["username"],
         "session_active": True,
         "tts_provider": tts_prov,
-        "fish_key": user["fish_key"],
-        "active_gemini_slot": user["active_gemini_slot"],
-        "gemini_keys": [user[f"gemini_key_{slot}"] for slot in range(1, 6)],
         "chat_provider": _u(user, "chat_provider", "gemini") or "gemini",
         "chat_model": _u(user, "chat_model", ""),
-        "provider_keys": claves_proveedor(user),
-        "gemini_voice_key": _u(user, "gemini_voice_key", ""),
+        # Formato nuevo: cualquier número de slots por cada sitio donde se pone una API
+        "key_lists": listas,
+        "gemini_active": gemini_activo(user),
+        # Campos antiguos (compatibilidad)
+        "fish_key": primera(listas["fish"]),
+        "active_gemini_slot": min(gemini_activo(user), 5),
+        "gemini_keys": (listas["gemini"] + [""] * 5)[:5],
+        "provider_keys": {p: primera(listas[p]) for p in PROVIDERS_CON_CLAVE},
+        "gemini_voice_key": primera(listas["voice_gemini"]),
     }
 
 
@@ -552,39 +744,66 @@ def generar_audio_edge(texto, voice="es-ES-ElviraNeural", rate="+0%", pitch="+0H
     nombre = f"voice_{uuid.uuid4().hex[:8]}.mp3"
     ruta = os.path.join(AUDIO_DIR, nombre)
 
-    async def generar():
+    async def generar(voz):
         texto_procesado = limpiar_texto(texto)
         if not texto_procesado:
             texto_procesado = "..."
-        communicate = edge_tts.Communicate(texto_procesado, voice, rate=rate, pitch=pitch)
+        communicate = edge_tts.Communicate(texto_procesado, voz, rate=rate, pitch=pitch)
         await communicate.save(ruta)
 
-    asyncio.run(generar())
+    try:
+        asyncio.run(generar(voice))
+    except Exception as error:
+        if voice == "es-ES-ElviraNeural":
+            raise
+        print(f"[Aviso TTS] La voz de Edge {voice} falló ({error}); usando es-ES-ElviraNeural.")
+        asyncio.run(generar("es-ES-ElviraNeural"))
     limpiar_cache_audio()
     return f"/audio_cache/{nombre}"
 
 
+# Fish Audio exige la cabecera "model". Sin ella usa s2.1-pro (de pago) y las cuentas gratuitas reciben 402.
+# s2.1-pro-free es el modelo gratuito de su API. Se puede forzar otro con FISH_MODEL (por ejemplo s2.1-pro o s1).
+FISH_MODELOS = [m for m in (os.environ.get("FISH_MODEL", "").strip(), "s2.1-pro-free", "s2-pro", "s1") if m]
+FISH_MODELOS = list(dict.fromkeys(FISH_MODELOS))
+FISH_MODELO_OK = {}  # clave -> último modelo que funcionó con ella
+
+
 def generar_audio_fish(texto, reference_id, api_key):
-    """Genera audio con Fish Audio para Nino Nakano usando su voz clonada."""
+    """Genera audio con Fish Audio (voz clonada de Nino) probando primero su modelo gratuito."""
     if not api_key:
         raise ValueError("No hay una clave de Fish Audio configurada")
     nombre = f"voice_fish_{uuid.uuid4().hex[:8]}.mp3"
     ruta = os.path.join(AUDIO_DIR, nombre)
+    texto_procesado = limpiar_texto(texto) or "..."
+    base = {"text": texto_procesado, "reference_id": reference_id, "format": "mp3"}
+    expresivo = {**base, "temperature": 0.85, "top_p": 0.85, "prosody": {"speed": 1.08, "volume": 0}}
+    modelos = list(FISH_MODELOS)
+    previo = FISH_MODELO_OK.get(api_key)
+    if previo in modelos:
+        modelos.remove(previo)
+        modelos.insert(0, previo)
+    ultimo_error = None
     try:
-        texto_procesado = limpiar_texto(texto)
-        if not texto_procesado:
-            texto_procesado = "..."
-        api_response = requests.post(
-            "https://api.fish.audio/v1/tts",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json={"text": texto_procesado, "reference_id": reference_id, "format": "mp3"},
-            timeout=25,
-        )
-        api_response.raise_for_status()
-        with open(ruta, "wb") as audio_file:
-            audio_file.write(api_response.content)
-        limpiar_cache_audio()
-        return f"/audio_cache/{nombre}"
+        for modelo in modelos:
+            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "model": modelo}
+            api_response = None
+            for cuerpo in (expresivo, base):
+                api_response = http_session.post("https://api.fish.audio/v1/tts", headers=headers, json=cuerpo, timeout=30)
+                if api_response.status_code not in (400, 422):
+                    break
+            if api_response.status_code == 200 and api_response.content:
+                with open(ruta, "wb") as audio_file:
+                    audio_file.write(api_response.content)
+                FISH_MODELO_OK[api_key] = modelo
+                limpiar_cache_audio()
+                return f"/audio_cache/{nombre}"
+            detalle = (api_response.text or "")[:200].replace("\n", " ")
+            ultimo_error = f"modelo {modelo}: HTTP {api_response.status_code} {detalle}"
+            print(f"[Aviso TTS] Fish Audio {ultimo_error}")
+            if api_response.status_code == 401:   # clave inválida: probar otro modelo no sirve
+                break
+        raise RuntimeError(ultimo_error or "Fish Audio no devolvió audio")
     except Exception:
         if os.path.exists(ruta):
             try:
@@ -602,14 +821,18 @@ def obtener_client(gemini_key):
     return clients[gemini_key]
 
 
+GEMINI_THINKING = {"on": True}  # se desactiva solo si algún modelo rechaza la opción de razonamiento
+
+
 def obtener_chat(user, waifu, gemini_key, model):
     chat_key = (user["id"], waifu, gemini_key, model)
     if chat_key not in chats:
         client = obtener_client(gemini_key)
-        chats[chat_key] = client.chats.create(
-            model=model,
-            config={"system_instruction": WAIFU_CONFIG[waifu]["system_instruction"]},
-        )
+        config = {"system_instruction": WAIFU_CONFIG[waifu]["system_instruction"]}
+        if GEMINI_THINKING["on"]:
+            # Razonamiento bajo: en charla normal la respuesta llega mucho antes.
+            config["thinking_config"] = types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
+        chats[chat_key] = client.chats.create(model=model, config=config)
     return chats[chat_key]
 
 
@@ -660,7 +883,7 @@ def generar_audio_gemini(texto, gemini_key, waifu="nino"):
     try:
         response = client.models.generate_content(
             model="gemini-3.8-flash-tts",
-            contents=texto_procesado,
+            contents=texto_procesado,  # solo lo que debe decir: cualquier instrucción añadida se leería en voz alta
             config=config,
         )
 
@@ -702,8 +925,8 @@ def generar_audio_gemini(texto, gemini_key, waifu="nino"):
 REGLA_PRECISION = (
     "\n\nMODO PREGUNTA - PRIORIDAD ABSOLUTA: LA EXACTITUD.\n"
     "1. La primera frase contiene la respuesta correcta y directa a lo que se pregunta.\n"
-    "2. Solo después, y en una frase corta, añade un toque de tu personalidad. Nunca dejes que el personaje "
-    "cambie, esconda o evite la respuesta.\n"
+    "2. Después reacciona con tu personalidad completa (intensa, expresiva, exclamativa) en una o dos frases. "
+    "Nunca la apagues ni hables en tono neutro, y nunca dejes que el personaje esconda o evite la respuesta.\n"
     "3. Si no estás segura o no tienes el dato, dilo con honestidad y en personaje. Nunca inventes cifras, "
     "fechas, nombres ni hechos.\n"
     "4. Para fecha, hora, lugar o tiempo meteorológico usa SOLO el contexto del sistema del mensaje; si ese "
@@ -714,10 +937,15 @@ REGLA_PRECISION = (
 
 def instrucciones_modo(modo, waifu):
     """Adapta el estilo de este turno sin cambiar la personalidad base del personaje."""
-    personaje = "Nino, mantén tu carácter tsundere" if waifu == "nino" else "Miku, mantén tu energía alegre y musical"
+    personaje = {
+        "nino": "Nino, mantén tu carácter tsundere",
+        "miku": "Miku, mantén tu energía alegre y musical",
+        "luna": "Luna, mantén tu frialdad serena y la ternura que se te escapa sin querer",
+        "mia": "Mia, mantén tu energía hiperactiva, tu dulzura nerviosa y el cariño secreto que se te escapa sin querer",
+    }.get(waifu, "Mantén tu personalidad")
     if modo == "pregunta":
         return (f"En este turno estás en modo pregunta. {personaje}, pero la exactitud va primero: "
-                "la primera frase es la respuesta correcta y directa; después, como mucho, un toque breve de tu personalidad.")
+                "la primera frase es la respuesta correcta y directa; después reacciona con tu carácter completo, con energía.")
     if modo == "automatico":
         return (f"En este turno estás en modo automático. {personaje}. "
                 "Decide por el contenido del mensaje si la persona busca una respuesta concreta o una charla abierta. "
@@ -802,7 +1030,7 @@ def lugar_desde_coords(lat, lon):
         if key in _geo_cache:
             return _geo_cache[key]
     try:
-        api_response = requests.get(
+        api_response = http_session.get(
             "https://nominatim.openstreetmap.org/reverse",
             params={"format": "jsonv2", "lat": lat, "lon": lon, "zoom": 10, "accept-language": "es"},
             headers={"User-Agent": "NinoAI/1.0 (chat de avatares)"},
@@ -831,7 +1059,7 @@ def tiempo_actual(lat, lon):
         if hit and time.time() - hit[0] < 600:
             return hit[1]
     try:
-        api_response = requests.get(
+        api_response = http_session.get(
             "https://api.open-meteo.com/v1/forecast",
             params={
                 "latitude": lat, "longitude": lon, "timezone": "auto", "forecast_days": 2,
@@ -878,11 +1106,14 @@ def construir_contexto(mensaje, location):
     coords = _coords(location)
     pregunta_tiempo = bool(RE_TIEMPO.search(mensaje))
     if coords and RE_CONTEXTO_LUGAR.search(mensaje):
-        lugar = lugar_desde_coords(*coords)
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futuro_lugar = pool.submit(lugar_desde_coords, *coords)
+            futuro_tiempo = pool.submit(tiempo_actual, *coords) if pregunta_tiempo else None
+            lugar = futuro_lugar.result()
+            tiempo = futuro_tiempo.result() if futuro_tiempo else ""
         if lugar:
             partes.append(f"Ubicación aproximada del usuario: {lugar}.")
         if pregunta_tiempo:
-            tiempo = tiempo_actual(*coords)
             if tiempo:
                 partes.append(f"Tiempo meteorológico real en esa ubicación (Open-Meteo): {tiempo}.")
             else:
@@ -937,10 +1168,10 @@ def llamar_proveedor_chat(provider, model, api_key, system, historial, temperatu
     if temperatura is not None and provider != "openai":
         payload["temperature"] = temperatura
 
-    api_response = requests.post(cfg["url"], headers=headers, json=payload, timeout=45)
+    api_response = http_session.post(cfg["url"], headers=headers, json=payload, timeout=45)
     if api_response.status_code == 400 and "temperature" in payload and "temperature" in api_response.text.lower():
         payload.pop("temperature")
-        api_response = requests.post(cfg["url"], headers=headers, json=payload, timeout=45)
+        api_response = http_session.post(cfg["url"], headers=headers, json=payload, timeout=45)
     if api_response.status_code >= 400:
         raise RuntimeError(f"{api_response.status_code} {api_response.text[:300]}")
     data = api_response.json()
@@ -954,19 +1185,28 @@ def llamar_proveedor_chat(provider, model, api_key, system, historial, temperatu
     return texto
 
 
-def enviar_gemini(user, waifu, api_key, model, mensaje_turno, system, precisa):
+def enviar_gemini(user, waifu, api_key, model, mensaje_turno, system, precisa, buscar=False):
     chat = obtener_chat(user, waifu, api_key, model)
     if not precisa:
-        return chat.send_message(mensaje_turno).text
+        try:
+            return chat.send_message(mensaje_turno).text
+        except Exception as error:
+            if GEMINI_THINKING["on"] and "thinking" in str(error).lower():
+                GEMINI_THINKING["on"] = False
+                chats.pop((user["id"], waifu, api_key, model), None)
+                return obtener_chat(user, waifu, api_key, model).send_message(mensaje_turno).text
+            raise
     # En modo pregunta: temperatura baja + búsqueda de Google para datos reales. La config por mensaje
     # sustituye a la del chat, por eso se repite aquí la system_instruction completa.
     base = {"system_instruction": system, "temperature": 0.2}
     texto = None
-    try:
-        busqueda = types.Tool(google_search=types.GoogleSearch())
-        texto = chat.send_message(mensaje_turno, config={**base, "tools": [busqueda]}).text
-    except Exception as error:
-        print(f"[Aviso Gemini] Búsqueda de Google no disponible ({error}); respondiendo sin ella.")
+    if buscar:
+        # La búsqueda de Google añade latencia, así que solo se usa en el modo Pregunta explícito.
+        try:
+            busqueda = types.Tool(google_search=types.GoogleSearch())
+            texto = chat.send_message(mensaje_turno, config={**base, "tools": [busqueda]}).text
+        except Exception as error:
+            print(f"[Aviso Gemini] Búsqueda de Google no disponible ({error}); respondiendo sin ella.")
     if texto:
         return texto
     return chat.send_message(mensaje_turno, config=base).text
@@ -997,11 +1237,9 @@ def procesar_gemini(mensaje, user, waifu="nino", modo="conversacion", generar_vo
         provider = "gemini"
     chat_model = str(_u(user, "chat_model", "") or "").strip()
 
-    if provider == "gemini":
-        api_key = (user[f"gemini_key_{user['active_gemini_slot']}"] or "").strip()
-    else:
-        api_key = str(claves_proveedor(user).get(provider, "") or "").strip()
-    if not api_key:
+    nombre_lista = "gemini" if provider == "gemini" else provider
+    claves = claves_en_orden(user, nombre_lista)
+    if not claves:
         return f"Añade una API Key de {CHAT_PROVIDERS[provider]['label']} en tu perfil para poder conversar.", None
 
     precisa = es_pregunta_directa(mensaje, modo)
@@ -1013,26 +1251,30 @@ def procesar_gemini(mensaje, user, waifu="nino", modo="conversacion", generar_vo
 
     respuesta = None
     last_error = None
-    for model in candidatos_modelo(provider, chat_model):
-        chat_key = (user["id"], waifu, api_key, model)
-        try:
-            if provider == "gemini":
-                respuesta = enviar_gemini(user, waifu, api_key, model, mensaje_turno, system, precisa)
-            else:
-                respuesta = enviar_otro_proveedor(user, waifu, provider, api_key, model, mensaje,
-                                                  mensaje_turno, system, temperatura)
-            if respuesta:
-                break
-        except Exception as error:
-            last_error = error
-            if provider == "gemini":
-                chats.pop(chat_key, None)
-                if "closed" in str(error).lower():
-                    clients.pop(api_key, None)
-            print(f"[Aviso {provider}] Modelo {model} falló: {str(error)[:300]}")
-            error_detail = str(error).lower()
-            if any(marker in error_detail for marker in ("429", "resource_exhausted", "quota", "403", "401", "api_key_invalid", "permission_denied")):
-                break
+    for api_key in claves:
+        for model in candidatos_modelo(provider, chat_model):
+            chat_key = (user["id"], waifu, api_key, model)
+            try:
+                if provider == "gemini":
+                    respuesta = enviar_gemini(user, waifu, api_key, model, mensaje_turno, system, precisa, buscar=(modo == "pregunta"))
+                else:
+                    respuesta = enviar_otro_proveedor(user, waifu, provider, api_key, model, mensaje,
+                                                      mensaje_turno, system, temperatura)
+                if respuesta:
+                    break
+            except Exception as error:
+                last_error = error
+                if provider == "gemini":
+                    chats.pop(chat_key, None)
+                    if "closed" in str(error).lower():
+                        clients.pop(api_key, None)
+                print(f"[Aviso {provider}] Modelo {model} falló: {str(error)[:300]}")
+                error_detail = str(error).lower()
+                if any(marker in error_detail for marker in ("429", "resource_exhausted", "quota", "403", "401", "api_key_invalid", "permission_denied")):
+                    break  # esta clave no sirve ahora (cuota o permiso): se prueba la siguiente
+        if respuesta:
+            CLAVE_PREFERIDA[(user["id"], nombre_lista)] = api_key
+            break
 
     if not respuesta:
         respuesta = mensaje_error_ia(last_error, provider)
@@ -1042,18 +1284,20 @@ def procesar_gemini(mensaje, user, waifu="nino", modo="conversacion", generar_vo
     return respuesta, generar_audio_respuesta(respuesta, user, waifu)
 
 
-def iniciar_generacion_audio(texto, user, waifu):
+def iniciar_generacion_audio(texto, user, waifu, postproceso=None):
     job_id = uuid.uuid4().hex
     with speech_jobs_lock:
         now = time.time()
         for stale_id, stale_job in list(speech_jobs.items()):
             if now - stale_job["created_at"] > 600:
                 speech_jobs.pop(stale_id, None)
-        speech_jobs[job_id] = {"user_id": user["id"], "status": "pending", "audio_url": None, "created_at": now}
+        speech_jobs[job_id] = {"user_id": user["id"], "status": "pending", "audio_url": None, "created_at": now, "event": Event()}
 
     def generar():
         try:
             audio_url = generar_audio_respuesta(texto, user, waifu)
+            if postproceso and audio_url:
+                audio_url = postproceso(audio_url)
         except Exception as error:
             print(f"[Error TTS] No se pudo generar el audio: {error}")
             audio_url = None
@@ -1062,6 +1306,7 @@ def iniciar_generacion_audio(texto, user, waifu):
             if job:
                 job["status"] = "done"
                 job["audio_url"] = audio_url
+                job["event"].set()
 
     Thread(target=generar, name=f"speech-{job_id[:8]}", daemon=True).start()
     return job_id
@@ -1100,21 +1345,21 @@ def generar_audio_respuesta(texto, user, waifu="nino"):
         except Exception as error:
             print(f"[Error TTS] Edge TTS falló: {error}")
             return None
-    if user_tts_pref == "fish":
-        try:
-            fish_key = str(user["fish_key"] or "").strip()
-        except Exception:
-            fish_key = ""
-        if fish_key:
+    if user_tts_pref == "fish" and config.get("usa_fish", True):
+        for fish_key in claves_en_orden(user, "fish"):
             try:
-                return generar_audio_fish(texto_audio, config.get("reference_id", "c961aaa2a71f469e98b8b2151b8c219d"), fish_key)
+                resultado = generar_audio_fish(texto_audio, config.get("reference_id", "c961aaa2a71f469e98b8b2151b8c219d"), fish_key)
+                CLAVE_PREFERIDA[(_u(user, "id", 0), "fish")] = fish_key
+                return resultado
             except Exception as error:
-                print(f"[Aviso TTS] Fish Audio falló: {error}")
-    if voice_key:
+                print(f"[Aviso TTS] Fish Audio falló con una clave: {error}")
+    for voice_key in claves_voz_gemini(user):
         try:
-            return generar_audio_gemini(texto_gemini, voice_key, waifu=waifu)
+            resultado = generar_audio_gemini(texto_gemini, voice_key, waifu=waifu)
+            CLAVE_PREFERIDA[(_u(user, "id", 0), "voice_gemini")] = voice_key
+            return resultado
         except Exception as error:
-            print(f"[Aviso TTS] Gemini TTS falló: {error}")
+            print(f"[Aviso TTS] Gemini TTS falló con una clave: {error}")
     try:
         return generar_audio_edge(texto_audio, voice=voice, rate=rate, pitch=pitch)
     except Exception as error:
@@ -1513,6 +1758,13 @@ def api_models():
     return json_response({"status": "ok", "providers": providers})
 
 
+def limpiar_lista_claves(valor):
+    if not isinstance(valor, list):
+        return [""]
+    limpia = [str(x or "").strip()[:400] for x in valor][:MAX_KEY_SLOTS]
+    return limpia or [""]
+
+
 @server_app.route("/api/profile", method=["GET", "PUT", "POST", "OPTIONS"])
 def api_profile():
     if request.method == "OPTIONS":
@@ -1523,16 +1775,6 @@ def api_profile():
     if request.method == "GET":
         return json_response({"status": "ok", "profile": public_profile(user)})
     data = request_data()
-    try:
-        active_slot = int(data.get("active_gemini_slot", user["active_gemini_slot"]))
-    except (TypeError, ValueError):
-        active_slot = 0
-    keys = data.get("gemini_keys", [user[f"gemini_key_{slot}"] or "" for slot in range(1, 6)])
-    if not isinstance(keys, list) or len(keys) != 5 or active_slot not in range(1, 6):
-        return json_response({"status": "error", "message": "Revisa el slot activo y las cinco claves de Gemini."}, 400)
-    clean_keys = [str(key or "").strip() for key in keys]
-    fish_key = str(data.get("fish_key", _u(user, "fish_key", ""))).strip()
-    gemini_voice_key = str(data.get("gemini_voice_key", _u(user, "gemini_voice_key", ""))).strip()
     tts_provider = str(data.get("tts_provider", _u(user, "tts_provider", "gemini"))).strip().lower()
     if tts_provider not in ("gemini", "fish", "edge"):
         tts_provider = "gemini"
@@ -1542,20 +1784,53 @@ def api_profile():
     chat_model = str(data.get("chat_model", _u(user, "chat_model", ""))).strip()
     if not re.fullmatch(r"[A-Za-z0-9._:/\-]{0,80}", chat_model):
         chat_model = ""
-    provider_keys = claves_proveedor(user)
-    nuevas = data.get("provider_keys")
+    # Listas de claves: cualquier número de slots por cada sitio donde se pone una API
+    almacen = claves_proveedor(user)
+    nuevas = data.get("key_lists")
     if isinstance(nuevas, dict):
-        for pid in CHAT_PROVIDERS:
-            if pid != "gemini" and pid in nuevas:
-                provider_keys[pid] = str(nuevas.get(pid) or "").strip()
+        for nombre in ("gemini", "voice_gemini", "fish") + PROVIDERS_CON_CLAVE:
+            if nombre in nuevas:
+                almacen[nombre] = limpiar_lista_claves(nuevas[nombre])
+    else:
+        # Cliente antiguo (cinco claves fijas): se descarta el formato nuevo para que no quede desfasado
+        for nombre in ("gemini", "voice_gemini", "fish"):
+            almacen.pop(nombre, None)
+        try:
+            almacen["gemini_active"] = int(data.get("active_gemini_slot", _u(user, "active_gemini_slot", 1)))
+        except (TypeError, ValueError):
+            pass
+        antiguas = data.get("gemini_keys")
+        if isinstance(antiguas, list) and len(antiguas) == 5:
+            almacen["gemini"] = limpiar_lista_claves(antiguas)
+        if "fish_key" in data:
+            almacen["fish"] = [str(data.get("fish_key") or "").strip()]
+        if "gemini_voice_key" in data:
+            almacen["voice_gemini"] = [str(data.get("gemini_voice_key") or "").strip()]
+        for pid, valor in (data.get("provider_keys") or {}).items() if isinstance(data.get("provider_keys"), dict) else []:
+            if pid in PROVIDERS_CON_CLAVE:
+                almacen[pid] = [str(valor or "").strip()]
+    gemini_list = limpiar_lista_claves(almacen.get("gemini", lista_claves(user, "gemini")))
+    try:
+        activo = int(data.get("gemini_active", data.get("active_gemini_slot", almacen.get("gemini_active") or _u(user, "active_gemini_slot", 1))))
+    except (TypeError, ValueError):
+        activo = 1
+    activo = max(1, min(activo, len(gemini_list)))
+    almacen["gemini"] = gemini_list
+    almacen["gemini_active"] = activo
+
+    # Columnas antiguas: se mantienen sincronizadas (primeros cinco slots) por compatibilidad
+    columnas_gemini = (gemini_list + [""] * 5)[:5]
+    primera = lambda lista: next((k for k in lista if k), "")
+    fish_key = primera(limpiar_lista_claves(almacen.get("fish", lista_claves(user, "fish"))))
+    voz_key = primera(limpiar_lista_claves(almacen.get("voice_gemini", lista_claves(user, "voice_gemini"))))
     with db_connection() as conn:
         db_execute(
             conn,
             """UPDATE users SET tts_provider = ?, fish_key = ?, active_gemini_slot = ?, gemini_key_1 = ?,
                gemini_key_2 = ?, gemini_key_3 = ?, gemini_key_4 = ?, gemini_key_5 = ?,
                chat_provider = ?, chat_model = ?, provider_keys = ?, gemini_voice_key = ? WHERE id = ?""",
-            (tts_provider, fish_key, active_slot, *clean_keys,
-             chat_provider, chat_model, json.dumps(provider_keys), gemini_voice_key, user["id"]),
+            (tts_provider, fish_key, min(activo, 5), *columnas_gemini,
+             chat_provider, chat_model, json.dumps(almacen), voz_key, user["id"]),
         )
         updated_user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
     for chat_key in list(chats):
@@ -1564,6 +1839,9 @@ def api_profile():
     for hist_key in list(histories):
         if hist_key[0] == user["id"]:
             del histories[hist_key]
+    for pref_key in list(CLAVE_PREFERIDA):
+        if pref_key[0] == user["id"]:
+            del CLAVE_PREFERIDA[pref_key]
     return json_response({"status": "ok", "profile": public_profile(updated_user)})
 
 
@@ -1598,6 +1876,15 @@ def api_speech(job_id):
         job = speech_jobs.get(job_id)
         if not job or job["user_id"] != user["id"]:
             return json_response({"status": "error", "message": "Audio no disponible."}, 404)
+        event = job.get("event")
+        pending = job["status"] == "pending"
+    # Espera larga: la respuesta sale en cuanto el audio está listo, sin esperar al siguiente sondeo.
+    if pending and event is not None:
+        event.wait(timeout=20)
+    with speech_jobs_lock:
+        job = speech_jobs.get(job_id)
+        if not job:
+            return json_response({"status": "error", "message": "Audio no disponible."}, 404)
         if job["status"] == "pending":
             return json_response({"status": "pending"})
         audio_url = job["audio_url"]
@@ -1630,6 +1917,67 @@ def index():
     return static_file("avatar.html", root=BASE_DIR)
 
 
+GREETING_DIR = os.path.join(AUDIO_DIR, "greetings")
+os.makedirs(GREETING_DIR, exist_ok=True)
+greeting_lock = Lock()
+
+
+@server_app.route("/audio_cache/greetings/<filename>")
+def servir_saludo(filename):
+    """Saludos de bienvenida ya generados (no caducan como el resto de la caché de audio)."""
+    return static_file(filename, root=GREETING_DIR)
+
+
+def motor_coincide(preferencia, nombre_archivo):
+    """True si el audio salió del motor que el usuario eligió (y no de un respaldo)."""
+    if preferencia == "gemini":
+        return nombre_archivo.startswith("voice_gemini_")
+    if preferencia == "fish":
+        return nombre_archivo.startswith("voice_fish_")
+    return not nombre_archivo.startswith(("voice_gemini_", "voice_fish_"))
+
+
+@server_app.route("/api/greet", method=["POST", "OPTIONS"])
+def api_greet():
+    """
+    Voz del saludo inicial del personaje. Se guarda para reutilizarlo y no gastar cuota de TTS en cada visita,
+    pero solo si lo generó el motor elegido (un audio de respaldo no se conserva).
+    """
+    if request.method == "OPTIONS":
+        return json_response({})
+    user = require_user()
+    if not user:
+        return json_response({"status": "error", "message": "Sesión no válida."}, 401)
+    data = request_data()
+    waifu = str(data.get("waifu", "nino")).strip()
+    if waifu not in WAIFU_CONFIG:
+        waifu = "nino"
+    texto = str(data.get("text", "")).strip()[:200]
+    if not texto:
+        return json_response({"status": "error", "message": "Texto vacío"}, 400)
+    config = WAIFU_CONFIG[waifu]
+    preferencia = str(_u(user, "tts_provider", "gemini") or "gemini").strip().lower()
+    if preferencia == "fish" and not config.get("usa_fish", True):
+        preferencia = "gemini"
+    identidad = {"gemini": config.get("gemini_voice", ""), "fish": config.get("reference_id", ""),
+                 "edge": f"{config.get('voice', '')}{config.get('rate', '')}{config.get('pitch', '')}"}.get(preferencia, "")
+    huella = hashlib.sha1(f"{preferencia}|{waifu}|{texto}|{identidad}".encode("utf-8")).hexdigest()[:16]
+    nombre = f"saludo_{huella}.mp3"
+    if os.path.isfile(os.path.join(GREETING_DIR, nombre)):
+        return json_response({"status": "ok", "audio_url": f"/audio_cache/greetings/{nombre}"})
+
+    def guardar(audio_url):
+        origen = os.path.join(AUDIO_DIR, os.path.basename(audio_url))
+        if motor_coincide(preferencia, os.path.basename(audio_url)) and os.path.isfile(origen):
+            with greeting_lock:
+                shutil.copyfile(origen, os.path.join(GREETING_DIR, nombre))
+            return f"/audio_cache/greetings/{nombre}"
+        return audio_url
+
+    job_id = iniciar_generacion_audio(texto, user, waifu, postproceso=guardar)
+    return json_response({"status": "ok", "speech_job_id": job_id})
+
+
 @server_app.route("/audio_cache/<filename>")
 def servir_audio(filename):
     """Sirve los archivos de voz generados en la caché de audio."""
@@ -1641,12 +1989,35 @@ def send_static(filename):
     """Sirve recursos estáticos (modelos VRM, texturas, etc.) protegiendo archivos sensibles."""
     if filename.lower().endswith(".db") or filename.lower() == "main.py":
         raise HTTPError(403, "Access denied.")
-    return static_file(filename, root=BASE_DIR)
+    resultado = static_file(filename, root=BASE_DIR)
+    if filename.lower().endswith((".vrm", ".glb", ".gltf", ".png", ".jpg", ".jpeg", ".webp", ".woff2", ".mp3")):
+        try:
+            resultado.set_header("Cache-Control", "public, max-age=86400")
+        except Exception:
+            pass
+    return resultado
 
 
 # --- PUNTO DE ENTRADA DEL SERVIDOR ---
 
+class ThreadedWSGIRefServer(ServerAdapter):
+    """Servidor con un hilo por petición. El de Bottle por defecto atiende de una en una: mientras generaba
+    una respuesta o descargaba un modelo 3D, todo lo demás (audio incluido) se quedaba esperando."""
+
+    def run(self, handler):
+        from socketserver import ThreadingMixIn
+        from wsgiref.simple_server import WSGIRequestHandler, WSGIServer, make_server
+
+        class ThreadedServer(ThreadingMixIn, WSGIServer):
+            daemon_threads = True
+            request_queue_size = 64
+
+        make_server(self.host, self.port, handler, server_class=ThreadedServer,
+                    handler_class=WSGIRequestHandler).serve_forever()
+
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     print(f"Iniciando servidor Omni-Wifu en http://0.0.0.0:{port}...")
-    server_app.run(host="0.0.0.0", port=port)
+    server_app.run(host="0.0.0.0", port=port, server=ThreadedWSGIRefServer)
