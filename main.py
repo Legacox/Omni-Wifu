@@ -504,7 +504,23 @@ def init_db():
 
 # Alias por compatibilidad e inicialización al cargar el servidor
 init_database = init_db
-init_db()
+
+def _init_db_safe():
+    """Intenta inicializar PostgreSQL; si falla, vuelve a SQLite para que la app no quede caída."""
+    global USING_POSTGRES
+    if USING_POSTGRES:
+        try:
+            init_db()
+        except Exception as _pg_init_err:
+            print(f"[BD] *** ERROR CRÍTICO conectando a PostgreSQL: {_pg_init_err} ***")
+            print("[BD] *** Cambiando a SQLite local como fallback de emergencia. ***")
+            print("[BD] *** Revisa DATABASE_URL y el estado del proyecto en Supabase.  ***")
+            USING_POSTGRES = False
+            init_db()
+    else:
+        init_db()
+
+_init_db_safe()
 try:
     with db_connection() as _conn_diag:
         _fila = db_execute(_conn_diag, "SELECT COUNT(*) AS n FROM users").fetchone()
