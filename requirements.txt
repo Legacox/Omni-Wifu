@@ -1,7 +1,6 @@
 bottle
-google-genai
-edge-tts>=7.3.1
 requests
-psycopg[binary]
+edge-tts
+google-genai
 supabase
-tzdata
+psycopg[binary]

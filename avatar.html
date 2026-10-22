@@ -902,7 +902,7 @@
         @media (max-width:600px) { .cookie-banner { bottom:10px; padding:16px; } .cookie-actions { display:grid; grid-template-columns:1fr 1fr; } .cookie-action:last-child { grid-column:1 / -1; } .cookie-settings-link { bottom:10px; left:10px; } .legal-info-link { bottom:47px; left:10px; } }
         @media (max-width: 768px) { .profile-toggle-btn { top: 18px; right: 18px; } .profile-panel { top: 18px; right: 18px; max-height: calc(100vh - 36px); } }
         @media (max-width: 380px) { .otp-inputs { gap: 6px; } .otp-digit { width: 40px; height: 46px; } }
-
+    
         /* --- MÓVIL: teclado rápido y campos editables --- */
         .glass-input, .profile-input { -webkit-user-select: text; user-select: text; }
         .glass-input, .glass-send-btn, .glass-mic-btn, .chat-mode-option { touch-action: manipulation; }
@@ -918,6 +918,7 @@
         .profile-legal-row { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 4px; }
         .profile-legal-btn { flex: 1; min-width: 120px; padding: 10px 12px; border: 1px solid rgba(28,28,30,.12); border-radius: 12px; background: rgba(255,255,255,.7); color: #1C1C1E; font: 800 12px 'Plus Jakarta Sans', sans-serif; cursor: pointer; transition: border-color .2s, box-shadow .2s; }
         .profile-legal-btn:hover { border-color: #FF3366; box-shadow: 0 5px 14px rgba(255,51,102,.12); }
+    
         /* --- Listas de claves (+ / −) --- */
         .key-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
         .key-head .profile-label { margin: 0; }
@@ -1009,7 +1010,7 @@
             <label class="profile-label" for="tts-provider-select">Motor de voz</label>
             <select class="profile-select" id="tts-provider-select">
                 <option value="gemini" selected>Gemini 3.8 TTS (Voz emotiva nativa con tu API Key de Gemini)</option>
-                <option value="fish">Fish Audio (Voz clonada personalizada de Nino)</option>
+                <option value="fish">Fish Audio (voz clonada ultrarrealista)</option>
                 <option value="edge">Edge TTS (Gratuito sin clave)</option>
             </select>
             <p class="profile-help">Elige el sintetizador principal. Si falla o no hay clave, el sistema usará el respaldo de forma automática.</p>
@@ -1049,15 +1050,13 @@
         <div class="profile-section" id="section-keys-fish">
             <div class="key-head"><label class="profile-label">Fish Audio · claves personales</label><button class="key-add" type="button" data-add="fish" title="Añadir otro slot" aria-label="Añadir otro slot">+</button></div>
             <div class="key-list" id="key-list-fish"></div>
-            <p class="profile-help">Solo hace falta si eliges Fish Audio. Si no hay clave o falla, el sistema usa Gemini TTS o Edge TTS.</p>
+            <p class="profile-help">Solo hace falta si eliges Fish Audio (voces clonadas de Nino y Miku). Con Luna y Mia, o si no hay clave o falla, usa Gemini TTS o Edge TTS.</p>
         </div>
         <div class="profile-section" id="section-help">
             <label class="profile-label">Ayuda</label>
             <div class="profile-legal-row">
                 <button class="profile-legal-btn" id="tutorial-replay-btn" type="button">▶ Ver tutorial</button>
             </div>
-        </div>
-        <div class="profile-section">
         </div>
         <div class="profile-section">
             <label class="profile-label">Privacidad y cookies</label>
@@ -1129,7 +1128,7 @@
 
     <!-- Botón Flotante para el Panel de Configuración -->
     <button class="config-toggle-btn" id="config-toggle-btn" title="Seleccionar Waifu">👤</button>
-
+    
     <!-- Panel Lateral de Configuración (Liquid Glass & Modern Cards) -->
     <div class="config-panel" id="config-panel">
         <button class="config-close-btn" id="config-close-btn">&times;</button>
@@ -1501,10 +1500,6 @@
                 const L = A.L, un = this.unit;
                 const lat = this.shoulderHalf + o * L;
                 const h = u * L;
-                if (Math.abs(lat) < 0.19 * un && h < 0.03 * un && h > -0.62 * un) {
-                    const front = 0.14 * un;
-                    if (f * L < front) f = front / L;
-                }
                 // Falda: por debajo de la cintura la muñeca no puede quedar dentro de un cono que se ensancha hacia el bajo
                 const sk = this.skirt;
                 if (sk && this.pos.spine && this.pos.leftUpperArm) {
@@ -1694,13 +1689,6 @@
         function classifyAttitude(text, name) {
             const m = _noAccents(text);
             const isNino = name === 'nino';
-            if (isNino && /\b(tch|tonto|idiota|baka|hmph|no es que|no te creas|que pesado|ni se te ocurra)\b/.test(m)) return 'tsun';
-            if (/\b(lo siento|entiendo|tranquil|preocup|dificil|aqui estoy|te escucho|animo|cuidate|comprendo)\b/.test(m)) return 'reflect';
-            if (/\b(gracias|me alegra|encantad|feliz|genial|increible|cariño|cuenta conmigo|me gusta|jaja|jeje|hola)\b/.test(m)) {
-                return (shyType && /\b(gracias|me gusta|cariño|me importas|quedate|contigo|te quiero)\b/.test(m)) ? 'shy' : 'warm';
-            }
-            if (/[?¿]/.test(m) || /\b(que opinas|crees que|por que|cuando|donde)\b/.test(m)) return 'curious';
-            if (/!|\b(oye|basta|claro que|por supuesto|obvio|sin duda|definitivamente)\b/.test(m)) return 'emphatic';
             const isLuna = name === 'luna';
             const isMia = name === 'mia';
             const shyType = isNino || isLuna || isMia;
@@ -1909,8 +1897,6 @@
             }
 
             onArrive() {
-                this.lastInteraction = this.time - 3;
-                this.idleAct = { name: this.P.arrival, t: 0, dur: this.P.arrival === 'wave' ? 2.6 : 2.4, next: rand(7, 10) };
                 try { if (window.onNinoCentered) window.onNinoCentered(this.name); } catch (_) {}
                 this.lastInteraction = this.time - 3;
                 if (startGreetingClip(this.vrm, this.rig, this.name)) {
@@ -2049,10 +2035,10 @@
                             const isDom = side === u.dom;
                             if (active && (u.both || isDom)) return this.gestureSpec(u.name, side);
                         }
-                        return this.ready();
+                        return crossed(side) || this.ready();
                     }
-                    if (listening) return P_(this.P.ready, [0.8, -1, -0.1], [-0.5, 0.8, 0.3], 0.38, 0, 0.9);
-                    return this.hang;
+                    if (listening) return crossed(side) || P_(this.P.ready, [0.8, -1, -0.1], [-0.5, 0.8, 0.3], 0.38, 0, 0.9);
+                    return crossed(side) || this.hang;
                 };
                 if (speaking && !walking) {
                     if (!d.unit) {
@@ -2628,6 +2614,7 @@
                     activeWaifuAnim = waifuName;
                     vrm.scene.visible = false;
                     scene.add(vrm.scene);
+
                     // Detectar si el modelo utiliza convención VRM 1.0 o VRM 0.0 (solo como pista:
                     // el rig deduce hacia dónde mira el personaje a partir de su propia geometría)
                     const isVRM1 = (vrm.meta && vrm.meta.metaVersion === '1') || !!(gltf.parser.json?.extensions?.VRMC_vrm);

@@ -18,15 +18,56 @@ from email.message import EmailMessage
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
+import logging
+
 import edge_tts
 import requests
 from bottle import Bottle, HTTPError, ServerAdapter, request, response, static_file
 from google import genai
 from google.genai import types
 
+
+
+def _cargar_env():
+    """Lee un archivo .env junto a main.py (DATABASE_URL, SUPABASE_URL, SUPABASE_KEY, FISH_MODEL...) sin pisar
+    variables ya definidas en el sistema. Así funciona igual al abrir Iniciar_Nino.bat que desde la terminal."""
+    ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+    if not os.path.isfile(ruta):
+        return
+    try:
+        with open(ruta, encoding="utf-8-sig") as archivo:
+            for linea in archivo:
+                linea = linea.strip()
+                if not linea or linea.startswith("#") or "=" not in linea:
+                    continue
+                clave, valor = linea.split("=", 1)
+                clave = clave.replace("export ", "", 1).strip()
+                valor = valor.strip()
+                if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
+                    valor = valor[1:-1]
+                if clave and clave not in os.environ:
+                    os.environ[clave] = valor
+        print("[Config] Variables cargadas desde .env")
+    except Exception as error:
+        print(f"[Config] No se pudo leer .env: {error}")
+
+
+_cargar_env()
+
+
+class _FiltroAFC(logging.Filter):
+    """El SDK de Google avisa de 'automatic function calling' en cada audio; es inofensivo y ensucia la consola."""
+    def filter(self, record):
+        return "automatic function calling" not in record.getMessage().lower()
+
+
+for _nombre_log in ("google_genai", "google_genai.models", "google_genai.chats", "google.genai", "google.genai.models"):
+    logging.getLogger(_nombre_log).addFilter(_FiltroAFC())
+
 # Sesión HTTP compartida: reutiliza conexiones (keep-alive) y evita repetir el handshake TLS en cada llamada.
 http_session = requests.Session()
 http_session.mount("https://", requests.adapters.HTTPAdapter(pool_connections=8, pool_maxsize=16))
+
 try:
     from zoneinfo import ZoneInfo
 except ImportError:
@@ -85,8 +126,13 @@ USING_POSTGRES = bool(DATABASE_URL) and (psycopg is not None or psycopg2 is not 
 if DATABASE_URL and not USING_POSTGRES:
     print("[BD] AVISO: DATABASE_URL está definida pero no hay driver de PostgreSQL. Instala: pip install \"psycopg[binary]\". "
           "Mientras tanto se usa SQLite local (en Render se pierde en cada despliegue).")
-print("[BD] Usando PostgreSQL (los usuarios y sus claves se guardan en esa base de datos)." if USING_POSTGRES
-      else "[BD] Usando SQLite local (users.db).")
+if USING_POSTGRES:
+    print("[BD] Usando PostgreSQL (los usuarios y sus claves se guardan en esa base de datos).")
+else:
+    print("[BD] Usando SQLite local (users.db).")
+    if not DATABASE_URL:
+        print("[BD] >>> Los usuarios y las claves API se guardan SOLO en users.db de este equipo, NO en Supabase. <<<\n"
+              "[BD]     Para usar Supabase crea un archivo .env junto a main.py con DATABASE_URL=... (mira .env.example).")
 
 # --- CLIENTE SUPABASE ---
 _supabase_url = os.environ.get("SUPABASE_URL", "").strip()
@@ -101,14 +147,17 @@ if create_client and _supabase_url and _supabase_key:
         supabase_client = None
 else:
     if not create_client:
-        print("[Supabase] Paquete 'supabase' no instalado — Auth de Supabase desactivado.")
+        print("[Supabase] Paquete 'supabase' no instalado — Auth de Supabase desactivado. Instálalo en el venv con: pip install supabase")
     elif not (_supabase_url and _supabase_key):
         print("[Supabase] SUPABASE_URL / SUPABASE_KEY no configuradas — Auth de Supabase desactivado.")
 
 SESSION_COOKIE = "nino_session"
 SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 días, para sobrevivir al cierre del navegador.
 TERMS_VERSION = "2026-10-10"
-AVAILABLE_MODELS = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]
+# Google retiró gemini-3.5-flash (redirige a 3.6) y gemini-3.7-flash (redirige a 3.8). Vigentes: 3.8 Flash (el más nuevo),
+# 3.6 Flash y 3.5 Flash-Lite. Si un modelo está saturado (503) se prueba el siguiente.
+AVAILABLE_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
+MODELOS_RETIRADOS = {"gemini-3.5-flash": "gemini-3.6-flash", "gemini-3.7-flash": "gemini-3.8-flash"}
 
 # Catálogo de modelos de conversación (todos livianos). Para añadir uno nuevo basta con
 # añadir su id a "models"; el frontend lo lee de /api/models, así que no hay que tocar el HTML.
@@ -456,6 +505,13 @@ def init_db():
 # Alias por compatibilidad e inicialización al cargar el servidor
 init_database = init_db
 init_db()
+try:
+    with db_connection() as _conn_diag:
+        _fila = db_execute(_conn_diag, "SELECT COUNT(*) AS n FROM users").fetchone()
+        _n = _fila["n"] if hasattr(_fila, "keys") else _fila[0]
+    print(f"[BD] Cuentas guardadas en {'PostgreSQL/Supabase' if USING_POSTGRES else 'users.db (local)'}: {_n}")
+except Exception as _diag_error:
+    print(f"[BD] No se pudo contar las cuentas: {_diag_error}")
 
 
 # --- AUTENTICACIÓN Y SESIONES ---
@@ -845,6 +901,10 @@ def mensaje_error_gemini(error):
         return "Gemini ha rechazado esta clave. Comprueba que sea una API Key válida de Google AI Studio."
     if "404" in detail or "not_found" in detail or ("model" in detail and "found" in detail):
         return "El modelo seleccionado no está disponible para esta clave. Inténtalo de nuevo o prueba con otra clave."
+    if "503" in detail or "unavailable" in detail or "overloaded" in detail or "high demand" in detail or "500" in detail:
+        return "Gemini está saturado ahora mismo (error temporal de Google). Espera unos segundos y vuelve a escribirme."
+    if "timeout" in detail or "timed out" in detail or "connect" in detail:
+        return "No he podido conectar con Gemini (problema de red o tiempo de espera). Inténtalo de nuevo."
     return "No pude conectar con Gemini en este momento. Revisa tu clave e inténtalo de nuevo."
 
 
@@ -1133,6 +1193,8 @@ histories = {}
 
 def candidatos_modelo(provider, chat_model):
     catalogo = list(CHAT_PROVIDERS[provider]["models"])
+    if provider == "gemini":
+        chat_model = MODELOS_RETIRADOS.get(chat_model, chat_model)
     if chat_model:
         return [chat_model] + [m for m in catalogo if m != chat_model]
     return catalogo
@@ -1256,7 +1318,16 @@ def procesar_gemini(mensaje, user, waifu="nino", modo="conversacion", generar_vo
             chat_key = (user["id"], waifu, api_key, model)
             try:
                 if provider == "gemini":
-                    respuesta = enviar_gemini(user, waifu, api_key, model, mensaje_turno, system, precisa, buscar=(modo == "pregunta"))
+                    try:
+                        respuesta = enviar_gemini(user, waifu, api_key, model, mensaje_turno, system, precisa, buscar=(modo == "pregunta"))
+                    except Exception as primer_error:
+                        texto_error = str(primer_error).lower()
+                        if not any(s in texto_error for s in ("503", "unavailable", "overloaded", "high demand")):
+                            raise
+                        print(f"[Aviso gemini] {model} saturado; reintentando en 1,5 s...")
+                        time.sleep(1.5)
+                        chats.pop(chat_key, None)
+                        respuesta = enviar_gemini(user, waifu, api_key, model, mensaje_turno, system, precisa, buscar=(modo == "pregunta"))
                 else:
                     respuesta = enviar_otro_proveedor(user, waifu, provider, api_key, model, mensaje,
                                                       mensaje_turno, system, temperatura)
@@ -1312,17 +1383,6 @@ def iniciar_generacion_audio(texto, user, waifu, postproceso=None):
     return job_id
 
 
-def clave_voz_gemini(user):
-    """Clave de Gemini solo para voz. Si no hay una propia, se usa la clave Gemini activa del chat."""
-    voz = str(_u(user, "gemini_voice_key", "") or "").strip()
-    if voz:
-        return voz
-    try:
-        return (user[f"gemini_key_{user['active_gemini_slot']}"] or "").strip()
-    except Exception:
-        return ""
-
-
 def generar_audio_respuesta(texto, user, waifu="nino"):
     """Genera voz bajo demanda, después de que el texto ya se haya mostrado."""
     if waifu not in WAIFU_CONFIG:
@@ -1333,7 +1393,6 @@ def generar_audio_respuesta(texto, user, waifu="nino"):
     voice = config.get("voice", "es-ES-ElviraNeural")
     rate = config.get("rate", "+0%")
     pitch = config.get("pitch", "+0Hz")
-    voice_key = clave_voz_gemini(user)
     try:
         user_tts_pref = str(user["tts_provider"] or "gemini").strip().lower()
     except Exception:
@@ -1775,6 +1834,7 @@ def api_profile():
     if request.method == "GET":
         return json_response({"status": "ok", "profile": public_profile(user)})
     data = request_data()
+
     tts_provider = str(data.get("tts_provider", _u(user, "tts_provider", "gemini"))).strip().lower()
     if tts_provider not in ("gemini", "fish", "edge"):
         tts_provider = "gemini"
@@ -1784,6 +1844,7 @@ def api_profile():
     chat_model = str(data.get("chat_model", _u(user, "chat_model", ""))).strip()
     if not re.fullmatch(r"[A-Za-z0-9._:/\-]{0,80}", chat_model):
         chat_model = ""
+
     # Listas de claves: cualquier número de slots por cada sitio donde se pone una API
     almacen = claves_proveedor(user)
     nuevas = data.get("key_lists")
