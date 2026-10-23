@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Nino AI</title>
+    <title>Omni Wifu</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -983,7 +983,7 @@
         <article class="terms-card">
             <button class="terms-close" id="cookie-preferences-close" type="button" aria-label="Cerrar">&times;</button>
             <h2 id="cookie-preferences-title">Preferencias de cookies</h2>
-            <p>Las cookies técnicas son necesarias para iniciar sesión y siempre están activas. Elige si quieres que Nino AI recuerde tu sesión al volver a abrir este navegador.</p>
+            <p>Las cookies técnicas son necesarias para iniciar sesión y siempre están activas. Elige si quieres que Omni Wifu recuerde tu sesión al volver a abrir este navegador.</p>
             <div class="cookie-preference-row">
                 <input id="cookie-remember-login" type="checkbox">
                 <label for="cookie-remember-login"><strong>Recordar mi inicio de sesión</strong><span>Cookie funcional propia, válida hasta 30 días. Si la desactivas, la cookie de autenticación será solo de sesión y se eliminará al cerrar el navegador.</span></label>
@@ -1072,7 +1072,7 @@
     <div class="auth-overlay" id="auth-overlay" aria-hidden="true">
         <form class="auth-card" id="auth-form">
             <div class="auth-logo">✦</div>
-            <h1 class="auth-title">Nino AI</h1>
+            <h1 class="auth-title">Omni Wifu</h1>
             <p class="auth-subtitle" id="auth-subtitle">Inicia sesión para conversar y guardar tus claves privadas.</p>
             <div class="auth-tabs" id="auth-tabs"><button class="auth-tab active" type="button" data-auth-mode="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-mode="register">Crear cuenta</button></div>
             <label class="profile-label" id="auth-username-label" for="auth-username">Usuario o correo electrónico</label>
@@ -1110,14 +1110,14 @@
     </div>
     <div class="terms-dialog" id="terms-dialog" role="dialog" aria-modal="true" aria-labelledby="terms-title">
         <article class="terms-card"><button class="terms-close" id="terms-close" type="button" aria-label="Cerrar">&times;</button>
-            <h2 id="terms-title">Términos, privacidad y cookies · Nino AI</h2>
+            <h2 id="terms-title">Términos, privacidad y cookies · Omni Wifu</h2>
             <p><strong>Versión 10/10/2026.</strong> Al crear una cuenta aceptas los términos del servicio. La información de privacidad se facilita para que sepas qué datos usa la aplicación; las cookies opcionales se gestionan por separado en el panel «Cookies».</p>
-            <h3>1. Servicio</h3><p>Nino AI ofrece una experiencia conversacional con personajes virtuales, generación de respuestas y síntesis de voz. Es un proyecto de entretenimiento; las respuestas pueden ser inexactas y no sustituyen asesoramiento profesional.</p>
+            <h3>1. Servicio</h3><p>Omni Wifu ofrece una experiencia conversacional con personajes virtuales, generación de respuestas y síntesis de voz. Es un proyecto de entretenimiento; las respuestas pueden ser inexactas y no sustituyen asesoramiento profesional.</p>
             <h3>2. Uso responsable</h3><p>Debes proporcionar datos de cuenta correctos, mantener la confidencialidad de tu contraseña y no usar el servicio para actividades ilícitas, perjudiciales o que vulneren derechos de terceros. El titular puede limitar cuentas ante abusos o riesgos de seguridad, de acuerdo con la normativa aplicable.</p>
             <h3>3. Cuenta y credenciales</h3><p>Se guarda el nombre de usuario, el correo verificado, una huella criptográfica de la contraseña, el identificador de sesión y las preferencias de voz. Las claves de Gemini y Fish Audio que introduzcas se guardan asociadas a tu cuenta y se usan para prestar las funciones que elijas. No introduzcas datos sensibles en el chat ni en las claves.</p>
             <h3>4. Privacidad y uso de datos</h3><p>Se tratan los datos de cuenta (nombre, correo, contraseña almacenada como hash criptográfico), identificador de sesión, preferencias, claves API guardadas en el perfil y contenido que escribas para generar respuestas y voz. La gestión de la cuenta y la prestación solicitada se vinculan a la relación de servicio; la seguridad del servicio puede basarse en el interés legítimo del titular. La cookie de 30 días solo se usa si la aceptas. El titular debe confirmar y documentar las bases jurídicas definitivas.</p><p>Para el registro y la verificación del correo se utiliza Supabase. Los mensajes se envían a Google Gemini para generar respuestas; el texto de voz se procesa con Fish Audio, Google Gemini o Edge TTS, según la configuración. El servidor de la aplicación puede estar alojado en Render. Según la información facilitada por el titular, la base de datos está en Frankfurt (Alemania). La página carga fuentes de Google Fonts y bibliotecas de JavaScript desde jsDelivr; al descargarlas, esos proveedores reciben datos técnicos de conexión como la dirección IP y el navegador. La región del servidor de aplicación, las transferencias internacionales, la relación jurídica y las condiciones de cada proveedor deben confirmarse según la configuración y los contratos activos.</p>
             <p>Las claves API se transmiten al proveedor correspondiente cuando solicitas una función. Evita escribir información especialmente sensible. La aplicación no ofrece actualmente un control de usuario para descargar o borrar una cuenta; las solicitudes de derechos deben dirigirse al responsable, cuyos datos de contacto deben publicarse en esta página antes de ofrecer el servicio. El titular debe definir y comunicar los plazos de conservación y el procedimiento de supresión de cuentas. Si el servicio se ofrece a menores, debe completarse la información y las medidas aplicables antes de permitir su registro.</p>
-            <h3>4 bis. Ubicación</h3><p>La ubicación solo se solicita al navegador cuando preguntas por el tiempo o por dónde estás, y solo si la autorizas. No se guarda en nuestra base de datos. Las coordenadas se usan para consultar el nombre del lugar (OpenStreetMap Nominatim) y el tiempo (Open-Meteo); a la IA solo se le envía el nombre del lugar y el tiempo, no las coordenadas. Puedes revocar el permiso en los ajustes del sitio de tu navegador.</p><h3>5. Cookies y almacenamiento local</h3><p>La cookie propia <code>nino_session</code> autentica tu cuenta. Es HttpOnly y SameSite=Lax; se marca como Secure cuando el sitio se sirve por HTTPS. Si rechazas las cookies opcionales, dura solo la sesión del navegador. Si aceptas «Recordar mi inicio de sesión», dura hasta 30 días. El código de la aplicación no integra herramientas de analítica ni publicidad. La preferencia se guarda en el almacenamiento local del navegador para recordar tu elección y puedes cambiarla con el botón «Cookies» de la esquina inferior izquierda.</p>
+            <h3>4 bis. Ubicación</h3><p>La ubicación solo se solicita al navegador cuando preguntas por el tiempo o por dónde estás, y solo si la autorizas. No se guarda en nuestra base de datos. Las coordenadas se usan para consultar el nombre del lugar (OpenStreetMap Nominatim) y el tiempo (Open-Meteo); a la IA solo se le envía el nombre del lugar y el tiempo, no las coordenadas. Puedes revocar el permiso en los ajustes del sitio de tu navegador.</p><h3>5. Cookies y almacenamiento local</h3><p>La cookie propia <code>omni_wifu_session</code> autentica tu cuenta. Es HttpOnly y SameSite=Lax; se marca como Secure cuando el sitio se sirve por HTTPS. Si rechazas las cookies opcionales, dura solo la sesión del navegador. Si aceptas «Recordar mi inicio de sesión», dura hasta 30 días. El código de la aplicación no integra herramientas de analítica ni publicidad. La preferencia se guarda en el almacenamiento local del navegador para recordar tu elección y puedes cambiarla con el botón «Cookies» de la esquina inferior izquierda.</p>
             <p>El almacenamiento de elección usa la clave local <code>nino_cookie_consent</code> e incluye la preferencia, versión y fecha de elección; se conserva durante seis meses y después se vuelve a preguntar. La cookie técnica es necesaria para el inicio de sesión que solicitas; la persistencia de 30 días es opcional y solo se activa tras aceptarla. Puedes retirar esa elección en cualquier momento desde «Cookies»; al rechazarla, la sesión actual pasa a ser de navegador.</p>
             <h3>6. Conservación y derechos</h3><p>El perfil y las claves permanecen asociados a la cuenta hasta que se eliminen conforme a un procedimiento que debe publicar el responsable. Las conversaciones se mantienen en memoria del servidor durante su ejecución y pueden enviarse a los proveedores descritos para generar la respuesta o la voz. Para ejercer los derechos de acceso, rectificación, supresión, oposición, limitación o portabilidad, o reclamar ante la AEPD, deben facilitarse aquí los datos y el canal de contacto del responsable.</p>
             <h3>7. Responsable y contacto</h3><p>Contacto para consultas de privacidad y ejercicio de derechos: <a href="mailto:angeljapon2012@gmail.com">angeljapon2012@gmail.com</a>. Sitio web: <a href="https://omni-wifu-46do.onrender.com/" target="_blank" rel="noopener noreferrer">https://omni-wifu-46do.onrender.com/</a>. La base de datos está en Frankfurt (Alemania), según la información facilitada por el titular.</p><p><strong>Información aún pendiente del titular:</strong> nombre legal o razón social, domicilio postal, forma jurídica y NIF si corresponden, y datos registrales cuando sean exigibles. También se debe confirmar la región del servidor de aplicación, los proveedores activos, sus contratos, posibles transferencias internacionales y los plazos de conservación. Estos datos deben completarse antes de considerar el aviso legal listo para publicación.</p>
@@ -3590,7 +3590,7 @@
         ];
 
         const TOUR_STEPS = [
-            { title: '¡Bienvenido a Nino AI!', text: 'Aquí conversas con personajes 3D que te responden con texto y voz. Te enseño en un minuto cómo funciona y cómo conseguir tu <b>API key</b> gratis, que es lo único que necesitas para empezar. Puedes saltar el tutorial cuando quieras.' },
+            { title: '¡Bienvenido a Omni Wifu!', text: 'Aquí conversas con personajes 3D que te responden con texto y voz. Te enseño en un minuto cómo funciona y cómo conseguir tu <b>API key</b> gratis, que es lo único que necesitas para empezar. Puedes saltar el tutorial cuando quieras.' },
             { target: '#config-toggle-btn', title: 'Cambia de personaje', text: 'Con este botón eliges con quién hablar: Nino, Miku, Luna o Mia. Cada una tiene su propia personalidad y su voz.' },
             { target: '#chat-mode-switch', title: 'Tres modos de respuesta', text: '<b>Conversación</b> es charla natural. <b>Pregunta</b> prioriza datos correctos (y puede consultar la hora y el tiempo de donde estás). <b>Automático</b> decide por ti según lo que escribas.' },
             { target: '.glass-input-bar', title: 'Escribe o habla', text: 'Escribe tu mensaje aquí y pulsa enviar. También puedes usar el micrófono 🎤 de al lado para hablar con voz.', pad: 8 },
@@ -4241,3 +4241,4 @@
     </script>
 </body>
 </html>
+

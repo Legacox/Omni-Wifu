@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import base64
 import hashlib
 import hmac
@@ -151,7 +151,7 @@ else:
     elif not (_supabase_url and _supabase_key):
         print("[Supabase] SUPABASE_URL / SUPABASE_KEY no configuradas — Auth de Supabase desactivado.")
 
-SESSION_COOKIE = "nino_session"
+SESSION_COOKIE = "omni_wifu_session"
 SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 días, para sobrevivir al cierre del navegador.
 TERMS_VERSION = "2026-10-10"
 # Google retiró gemini-3.5-flash (redirige a 3.6) y gemini-3.7-flash (redirige a 3.8). Vigentes: 3.8 Flash (el más nuevo),
@@ -599,10 +599,10 @@ def send_verification_email(email, code):
     if not host or not sender:
         raise RuntimeError("El envío de correo no está configurado en el servidor.")
     msg = EmailMessage()
-    msg["Subject"] = "Tu código para crear una cuenta en Nino AI"
+    msg["Subject"] = "Tu código para crear una cuenta en Omni Wifu"
     msg["From"] = sender
     msg["To"] = email
-    msg.set_content(f"Tu código de verificación para Nino AI es: {code}\n\nCaduca en 10 minutos. Si no has solicitado esta cuenta, ignora este correo.")
+    msg.set_content(f"Tu código de verificación para Omni Wifu es: {code}\n\nCaduca en 10 minutos. Si no has solicitado esta cuenta, ignora este correo.")
     port = int(os.environ.get("SMTP_PORT", "587"))
     user, password = os.environ.get("SMTP_USER", ""), os.environ.get("SMTP_PASSWORD", "")
     with smtplib.SMTP(host, port, timeout=20) as smtp:
@@ -2098,3 +2098,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     print(f"Iniciando servidor Omni-Wifu en http://0.0.0.0:{port}...")
     server_app.run(host="0.0.0.0", port=port, server=ThreadedWSGIRefServer)
+
