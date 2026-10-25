@@ -2020,6 +2020,34 @@ def api_record():
 
 # --- RUTAS ESTÁTICAS Y SERVIDAS ---
 
+SITE_URL = os.environ.get("SITE_URL", "https://omni-wifu.onrender.com").rstrip("/")
+
+
+@server_app.route("/robots.txt")
+def robots_txt():
+    """Indica a los buscadores qué pueden rastrear y dónde está el sitemap."""
+    response.content_type = "text/plain; charset=utf-8"
+    return (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /api/\n"
+        "Disallow: /audio_cache/\n"
+        f"Sitemap: {SITE_URL}/sitemap.xml\n"
+    )
+
+
+@server_app.route("/sitemap.xml")
+def sitemap_xml():
+    """Sitemap mínimo para Google Search Console."""
+    response.content_type = "application/xml; charset=utf-8"
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        f"<url><loc>{SITE_URL}/</loc></url>"
+        "</urlset>"
+    )
+
+
 @server_app.route("/")
 def index():
     """Carga la interfaz principal avatar.html en la raíz del servidor."""
@@ -2099,7 +2127,16 @@ def servir_audio(filename):
 @server_app.route("/<filename:path>")
 def send_static(filename):
     """Sirve recursos estáticos (modelos VRM, texturas, etc.) protegiendo archivos sensibles."""
-    if filename.lower().endswith(".db") or filename.lower() == "main.py":
+    nombre = filename.replace("\\", "/").lower()
+    partes = [parte for parte in nombre.split("/") if parte]
+    carpetas_privadas = {"venv", "__pycache__", "node_modules", "audio_cache"}
+    extensiones_privadas = (".db", ".py", ".bat", ".env", ".txt", ".pth", ".example", ".md", ".sqlite", ".sqlite3", ".log")
+    if (
+        any(parte.startswith(".") for parte in partes)
+        or (partes and partes[0] in carpetas_privadas)
+        or nombre.endswith(extensiones_privadas)
+        or nombre == "main.py"
+    ):
         raise HTTPError(403, "Access denied.")
     resultado = static_file(filename, root=BASE_DIR)
     if filename.lower().endswith((".vrm", ".glb", ".gltf", ".png", ".jpg", ".jpeg", ".webp", ".woff2", ".mp3")):
