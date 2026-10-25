@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -505,18 +505,53 @@ def init_db():
 # Alias por compatibilidad e inicialización al cargar el servidor
 init_database = init_db
 
+def explicar_error_postgres(error):
+    """Traduce el error de conexión a Supabase en la causa más probable y qué hacer."""
+    t = str(error).lower()
+    if any(s in t for s in ("could not translate host", "name or service not known", "network is unreachable",
+                            "no route to host", "nodename nor servname", "getaddrinfo")):
+        return ("No se alcanza el servidor. La conexión directa (db.xxxx.supabase.co) solo usa IPv6 y muchas redes y "
+                "hosts no la tienen. Usa la cadena 'Session pooler' de Supabase (Connect → Session pooler, host "
+                "aws-0-REGIÓN.pooler.supabase.com).")
+    if "tenant or user not found" in t:
+        return "Usuario incorrecto para el pooler: debe ser postgres.TU_REFERENCIA_DE_PROYECTO (no solo 'postgres')."
+    if "password authentication failed" in t or "authentication failed" in t:
+        return ("Contraseña incorrecta, o tiene símbolos (@ # / : ?) sin codificar en la URL (@ = %40, # = %23). "
+                "Puedes restablecerla en Supabase → Project Settings → Database.")
+    if "timeout" in t or "timed out" in t or "connection refused" in t:
+        return ("Sin respuesta del servidor. Si el proyecto de Supabase es gratuito y lleva días sin uso, está PAUSADO: "
+                "entra en el panel de Supabase y pulsa 'Restore project'.")
+    if "ssl" in t:
+        return "Problema de SSL: añade ?sslmode=require al final de DATABASE_URL."
+    if "does not exist" in t and "database" in t:
+        return "El nombre de la base de datos del final de la URL es incorrecto (normalmente es 'postgres')."
+    return "Revisa DATABASE_URL (copia de nuevo la cadena del Session pooler) y el estado del proyecto en Supabase."
+
+
 def _init_db_safe():
-    """Intenta inicializar PostgreSQL; si falla, vuelve a SQLite para que la app no quede caída."""
+    """Intenta inicializar PostgreSQL (con reintentos); si sigue fallando, usa SQLite pero avisando muy claro,
+    porque en Render ese SQLite se borra en cada despliegue y los usuarios y claves se perderían."""
     global USING_POSTGRES
     if USING_POSTGRES:
-        try:
-            init_db()
-        except Exception as _pg_init_err:
-            print(f"[BD] *** ERROR CRÍTICO conectando a PostgreSQL: {_pg_init_err} ***")
-            print("[BD] *** Cambiando a SQLite local como fallback de emergencia. ***")
-            print("[BD] *** Revisa DATABASE_URL y el estado del proyecto en Supabase.  ***")
-            USING_POSTGRES = False
-            init_db()
+        ultimo = None
+        for intento in range(1, 4):
+            try:
+                init_db()
+                return
+            except Exception as _pg_init_err:
+                ultimo = _pg_init_err
+                print(f"[BD] Intento {intento}/3 de conectar con PostgreSQL falló: {str(_pg_init_err)[:200]}")
+                if intento < 3:
+                    time.sleep(3)
+        barra = "!" * 78
+        print(barra)
+        print("[BD] NO SE PUEDE CONECTAR CON SUPABASE: los usuarios y las claves API NO se están guardando allí.")
+        print(f"[BD] Error: {str(ultimo)[:300]}")
+        print(f"[BD] Causa probable: {explicar_error_postgres(ultimo)}")
+        print("[BD] Mientras tanto se usa SQLite temporal (en Render se BORRA en cada reinicio o despliegue).")
+        print(barra)
+        USING_POSTGRES = False
+        init_db()
     else:
         init_db()
 
@@ -2095,6 +2130,23 @@ class ThreadedWSGIRefServer(ServerAdapter):
 
 
 if __name__ == "__main__":
+    import sys
+    if "--check-db" in sys.argv:
+        print("Comprobando la base de datos configurada...")
+        if not DATABASE_URL:
+            print("DATABASE_URL no está definida: se usaría users.db local.")
+        else:
+            try:
+                prueba = _pg_connect()
+                cur = prueba.cursor()
+                cur.execute("SELECT COUNT(*) AS n FROM users")
+                fila = cur.fetchone()
+                print("CONEXIÓN OK con PostgreSQL. Cuentas en la tabla users:", fila["n"] if hasattr(fila, "keys") else fila[0])
+                prueba.close()
+            except Exception as error_prueba:
+                print("FALLO:", str(error_prueba)[:300])
+                print("Causa probable:", explicar_error_postgres(error_prueba))
+        sys.exit(0)
     port = int(os.environ.get("PORT", 8080))
     print(f"Iniciando servidor Omni-Wifu en http://0.0.0.0:{port}...")
     server_app.run(host="0.0.0.0", port=port, server=ThreadedWSGIRefServer)

@@ -1,8 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <title>Omni Wifu</title>
+    <link rel="icon" type="image/jpeg" href="logo-light.jpg">
+    <meta name="theme-color" content="#1F2430">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -850,6 +852,10 @@
         }
         .auth-overlay.visible .auth-card { transform: translateY(0) scale(1); }
         .auth-logo { width: 52px; height: 52px; display: grid; place-items: center; margin-bottom: 14px; border-radius: 17px; background: linear-gradient(135deg, #FF3366, #ff8e73); color: white; font-size: 24px; box-shadow: 5px 5px 0 #1C1C1E; }
+        .auth-logo-img { display: block; width: 132px; height: 132px; margin: -6px auto 6px; border-radius: 28px; object-fit: cover; box-shadow: 0 10px 28px rgba(111, 66, 193, 0.22); }
+        .auth-logo-img.logo-dark { display: none; }
+        @media (prefers-color-scheme: dark) { .auth-logo-img.logo-dark { display: block; } .auth-logo-img.logo-light { display: none; } }
+        .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .auth-title { margin: 0; color: #1C1C1E; font-size: 25px; font-weight: 800; letter-spacing: -.8px; }
         .auth-subtitle { margin: 6px 0 20px; color: rgba(60,60,67,.65); font-size: 12px; font-weight: 600; line-height: 1.5; }
         .auth-tabs { display: flex; padding: 4px; gap: 4px; border-radius: 13px; background: rgba(28,28,30,.07); margin-bottom: 16px; }
@@ -1071,8 +1077,9 @@
 
     <div class="auth-overlay" id="auth-overlay" aria-hidden="true">
         <form class="auth-card" id="auth-form">
-            <div class="auth-logo">✦</div>
-            <h1 class="auth-title">Omni Wifu</h1>
+            <img class="auth-logo-img logo-light" src="logo-light.jpg" alt="Omni-Wifu, tu compañera de IA" width="132" height="132">
+            <img class="auth-logo-img logo-dark" src="logo-dark.jpg" alt="" aria-hidden="true" width="132" height="132">
+            <h1 class="auth-title sr-only">Omni Wifu</h1>
             <p class="auth-subtitle" id="auth-subtitle">Inicia sesión para conversar y guardar tus claves privadas.</p>
             <div class="auth-tabs" id="auth-tabs"><button class="auth-tab active" type="button" data-auth-mode="login">Iniciar sesión</button><button class="auth-tab" type="button" data-auth-mode="register">Crear cuenta</button></div>
             <label class="profile-label" id="auth-username-label" for="auth-username">Usuario o correo electrónico</label>
