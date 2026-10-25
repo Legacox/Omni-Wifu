@@ -17,6 +17,16 @@
     <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Omni Wifu","alternateName":["Omni-Wifu","Omni Waifu"],"url":"https://omni-wifu.onrender.com/","applicationCategory":"EntertainmentApplication","operatingSystem":"Web","inLanguage":"es","description":"Chat con avatares 3D de IA con voz y animaciones, desde el navegador."}</script>
     <link rel="icon" type="image/jpeg" href="logo-light.jpg">
     <meta name="theme-color" content="#1F2430">
+    <script>
+        (function () {
+            var t = null;
+            try { t = localStorage.getItem('omni-theme'); } catch (e) {}
+            if (t !== 'light' && t !== 'dark') t = (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-theme', t);
+            var m = document.querySelector('meta[name="theme-color"]');
+            if (m) m.setAttribute('content', t === 'dark' ? '#161922' : '#1F2430');
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -866,7 +876,7 @@
         .auth-logo { width: 52px; height: 52px; display: grid; place-items: center; margin-bottom: 14px; border-radius: 17px; background: linear-gradient(135deg, #FF3366, #ff8e73); color: white; font-size: 24px; box-shadow: 5px 5px 0 #1C1C1E; }
         .auth-logo-img { display: block; width: 132px; height: 132px; margin: -6px auto 6px; border-radius: 28px; object-fit: cover; box-shadow: 0 10px 28px rgba(111, 66, 193, 0.22); }
         .auth-logo-img.logo-dark { display: none; }
-        @media (prefers-color-scheme: dark) { .auth-logo-img.logo-dark { display: block; } .auth-logo-img.logo-light { display: none; } }
+        html[data-theme="dark"] .auth-logo-img.logo-dark { display: block; } html[data-theme="dark"] .auth-logo-img.logo-light { display: none; }
         .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
         .auth-title { margin: 0; color: #1C1C1E; font-size: 25px; font-weight: 800; letter-spacing: -.8px; }
         .auth-subtitle { margin: 6px 0 20px; color: rgba(60,60,67,.65); font-size: 12px; font-weight: 600; line-height: 1.5; }
@@ -976,6 +986,230 @@
         .tour-btn.primary:hover { background: #FF3366; }
         .tour-btn.ghost { color: #1C1C1E; background: rgba(28,28,30,.07); }
         .tour-skip { display: block; margin: 10px auto 0; border: 0; background: none; cursor: pointer; font: 700 11px 'Plus Jakarta Sans', sans-serif; color: rgba(60,60,67,.62); text-decoration: underline; }
+
+        /* --- MODO CLARO / OSCURO --- */
+        .theme-toggle-btn {
+            position: fixed; right: 24px; bottom: 24px; z-index: 112;
+            width: 40px; height: 40px; display: grid; place-items: center; padding: 0;
+            border-radius: 50%; border: 1.5px solid rgba(255,255,255,.78);
+            background: rgba(255,255,255,.55); color: #1C1C1E; cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0,0,0,.10), inset 0 1px 2px rgba(255,255,255,.9);
+            backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
+            transition: transform .2s ease, background .2s ease, color .2s ease;
+            -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+        }
+        .theme-toggle-btn:hover { transform: scale(1.08); background: rgba(255,255,255,.82); }
+        .theme-toggle-btn:active { transform: scale(.94); }
+        .theme-toggle-btn:focus-visible { outline: 2px solid #FF3366; outline-offset: 2px; }
+        .theme-toggle-btn svg { width: 18px; height: 18px; display: block; }
+        .theme-toggle-btn .icon-sun { display: none; }
+        html[data-theme="dark"] .theme-toggle-btn .icon-sun { display: block; }
+        html[data-theme="dark"] .theme-toggle-btn .icon-moon { display: none; }
+        @media (pointer: coarse) { .theme-toggle-btn { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(255,255,255,.88); } }
+        @media (max-width: 768px) {
+            .theme-toggle-btn { right: 16px; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+            body.avatar-authenticated .theme-toggle-btn { bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+        }
+
+        html[data-theme="dark"] { color-scheme: dark; }
+        html[data-theme="dark"] body, html[data-theme="dark"] { background: #161922; }
+        html[data-theme="dark"] .theme-toggle-btn { border-color: rgba(255,255,255,.14); background: rgba(34,38,50,.62); color: #F2F2F7; box-shadow: 0 8px 24px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.08); }
+        html[data-theme="dark"] .theme-toggle-btn:hover { background: rgba(52,57,74,.85); }
+        @media (pointer: coarse) { html[data-theme="dark"] .theme-toggle-btn { background: rgba(34,38,50,.92); } }
+
+        /* Burbuja manga */
+        html[data-theme="dark"] .user-whisper { background: rgba(40,44,58,.72); border-color: rgba(255,255,255,.12); color: #B4B2FF; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+        html[data-theme="dark"] .manga-bubble { background: #1E212B; border-color: #F2F2F7; box-shadow: 6px 6px 0 #000; }
+        html[data-theme="dark"] .manga-bubble::after { border-left-color: #F2F2F7; }
+        html[data-theme="dark"] .manga-bubble::before { border-left-color: #1E212B; }
+        html[data-theme="dark"] .manga-text { color: #F2F2F7; }
+        html[data-theme="dark"] .manga-container.bubble-compact .manga-bubble { box-shadow: 3px 3px 0 #000; }
+
+        /* Barra inferior */
+        html[data-theme="dark"] .chat-mode-switch { border-color: rgba(255,255,255,.12); background: rgba(30,33,43,.62); box-shadow: 0 8px 24px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.06); }
+        html[data-theme="dark"] .chat-mode-option { color: rgba(242,242,247,.72); }
+        html[data-theme="dark"] .chat-mode-option:hover { color: #fff; }
+        html[data-theme="dark"] .chat-mode-option.active { background: #2E3243; color: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,51,102,.3); }
+        html[data-theme="dark"] .glass-input-bar { background: rgba(30,33,43,.58); border-color: rgba(255,255,255,.14); box-shadow: 0 10px 30px rgba(0,0,0,.4), inset 0 1px 1px rgba(255,255,255,.06); }
+        html[data-theme="dark"] .glass-input-bar:focus-within { background: rgba(36,40,54,.82); border-color: rgba(255,51,102,.55); }
+        html[data-theme="dark"] .glass-input { color: #F2F2F7; }
+        html[data-theme="dark"] .glass-input::placeholder { color: rgba(235,235,245,.5); }
+        html[data-theme="dark"] .glass-send-btn { background: #F2F2F7; color: #1C1C1E; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+        html[data-theme="dark"] .glass-send-btn:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .glass-mic-btn { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #F2F2F7; box-shadow: 0 6px 18px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.06); }
+        html[data-theme="dark"] .glass-mic-btn:hover { background: rgba(255,255,255,.15); }
+        html[data-theme="dark"] .glass-mic-btn.recording { background: rgba(255,51,102,.28); border-color: rgba(255,51,102,.85); color: #FF6B8E; }
+        @media (pointer: coarse) {
+            html[data-theme="dark"] .glass-dock .chat-mode-switch,
+            html[data-theme="dark"] .glass-input-bar,
+            html[data-theme="dark"] .glass-mic-btn { background: rgba(30,33,43,.92); }
+            html[data-theme="dark"] .glass-mic-btn.recording { background: rgba(255,51,102,.3); }
+        }
+
+        /* Botones y paneles flotantes */
+        html[data-theme="dark"] .config-toggle-btn,
+        html[data-theme="dark"] .profile-toggle-btn { background: rgba(34,38,50,.62); border-color: rgba(255,255,255,.14); color: #F2F2F7; box-shadow: 0 10px 28px rgba(0,0,0,.4), inset 0 1px 1px rgba(255,255,255,.06); }
+        html[data-theme="dark"] .config-toggle-btn:hover,
+        html[data-theme="dark"] .profile-toggle-btn:hover { background: rgba(52,57,74,.85); }
+        html[data-theme="dark"] .config-panel,
+        html[data-theme="dark"] .profile-panel { background: rgba(24,27,36,.82); border-color: rgba(255,255,255,.12); box-shadow: 0 30px 60px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.06); }
+        html[data-theme="dark"] .config-close-btn { background: rgba(255,255,255,.09); color: #F2F2F7; }
+        html[data-theme="dark"] .config-close-btn:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] #profile-close-btn { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.12); color: #F2F2F7; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+        html[data-theme="dark"] #profile-close-btn:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .config-title { color: #F2F2F7; }
+        html[data-theme="dark"] .config-subtitle { color: rgba(235,235,245,.62); }
+
+        /* Tarjetas de personajes */
+        html[data-theme="dark"] .waifu-card { background: rgba(255,255,255,.06); box-shadow: 0 4px 12px rgba(0,0,0,.25); }
+        html[data-theme="dark"] .waifu-card:hover { background: rgba(255,255,255,.11); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+        html[data-theme="dark"] .waifu-card.active { background: rgba(255,255,255,.14); }
+        html[data-theme="dark"] .waifu-card-title { color: #F2F2F7; }
+        html[data-theme="dark"] .waifu-card-role { color: rgba(235,235,245,.62); }
+        html[data-theme="dark"] .waifu-card-tag { color: #FF6B8E; }
+        html[data-theme="dark"] .waifu-card[data-waifu="miku"] .waifu-card-tag { color: #5ADBD0; }
+        html[data-theme="dark"] .waifu-card[data-waifu="luna"] .waifu-card-tag { color: #A5ADFF; }
+        html[data-theme="dark"] .waifu-card[data-waifu="mia"] .waifu-card-tag { color: #FFA06B; }
+        html[data-theme="dark"] .waifu-detail-box,
+        html[data-theme="dark"] .bubble-style-settings { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.1); box-shadow: none; }
+        html[data-theme="dark"] .waifu-detail-header { color: rgba(235,235,245,.5); }
+        html[data-theme="dark"] .waifu-desc { color: #F2F2F7; }
+        html[data-theme="dark"] .bubble-style-option { background: rgba(255,255,255,.07); color: #F2F2F7; }
+        html[data-theme="dark"] .bubble-style-option:hover { background: rgba(255,255,255,.14); }
+        html[data-theme="dark"] .bubble-style-option.active { background: rgba(255,255,255,.16); border-color: #FF3366; box-shadow: 0 5px 14px rgba(255,51,102,.22); }
+        html[data-theme="dark"] .bubble-style-option-copy { color: rgba(235,235,245,.6); }
+
+        /* Perfil */
+        html[data-theme="dark"] .profile-user-card,
+        html[data-theme="dark"] .profile-section { background: rgba(255,255,255,.055); border-color: rgba(255,255,255,.1); }
+        html[data-theme="dark"] .profile-username { color: #F2F2F7; }
+        html[data-theme="dark"] .profile-status { color: #4ADE80; }
+        html[data-theme="dark"] .profile-label { color: rgba(235,235,245,.62); }
+        html[data-theme="dark"] .profile-help { color: rgba(235,235,245,.6); }
+        html[data-theme="dark"] .profile-input,
+        html[data-theme="dark"] .profile-select { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); color: #F2F2F7; }
+        html[data-theme="dark"] .profile-input::placeholder { color: rgba(235,235,245,.42); }
+        html[data-theme="dark"] .profile-input:focus { border-color: #FF3366; box-shadow: 0 0 0 3px rgba(255,51,102,.2); }
+        html[data-theme="dark"] .password-toggle { color: rgba(235,235,245,.6); }
+        html[data-theme="dark"] .password-toggle:hover { color: #FF6B8E; background: rgba(255,51,102,.14); }
+        html[data-theme="dark"] .profile-choice-trigger { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); color: #F2F2F7; box-shadow: 0 4px 13px rgba(0,0,0,.25); }
+        html[data-theme="dark"] .profile-choice-trigger:hover,
+        html[data-theme="dark"] .profile-choice.open .profile-choice-trigger { border-color: rgba(255,51,102,.55); box-shadow: 0 5px 16px rgba(255,51,102,.14); }
+        html[data-theme="dark"] .profile-choice-chevron { color: #FF6B8E; background: rgba(255,51,102,.14); }
+        html[data-theme="dark"] .profile-choice-menu { background: rgba(28,31,41,.97); border-color: rgba(255,255,255,.12); box-shadow: 0 18px 45px rgba(0,0,0,.55); }
+        html[data-theme="dark"] .profile-choice-option { color: rgba(242,242,247,.85); }
+        html[data-theme="dark"] .profile-choice-option:hover,
+        html[data-theme="dark"] .profile-choice-option:focus-visible { color: #fff; background: rgba(255,51,102,.16); border-color: rgba(255,51,102,.28); }
+        html[data-theme="dark"] .profile-choice-option[aria-selected="true"] { color: #FF8FA8; background: rgba(255,51,102,.16); }
+        html[data-theme="dark"] .profile-choice-check { background: rgba(255,255,255,.1); }
+        html[data-theme="dark"] .profile-choice-option[aria-selected="true"] .profile-choice-check { background: linear-gradient(135deg,#FF3366,#ff8e73); color: #fff; }
+        html[data-theme="dark"] .key-row label { color: #F2F2F7; }
+        html[data-theme="dark"] .key-row small { color: rgba(235,235,245,.5); }
+        html[data-theme="dark"] .key-add { background: #F2F2F7; color: #1C1C1E; }
+        html[data-theme="dark"] .key-add:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .key-remove,
+        html[data-theme="dark"] .profile-logout { color: #FF6B8E; background: rgba(255,51,102,.16); }
+        html[data-theme="dark"] .key-link { color: #FF6B8E; }
+        html[data-theme="dark"] .profile-save { background: #F2F2F7; color: #1C1C1E; box-shadow: 0 5px 12px rgba(0,0,0,.35); }
+        html[data-theme="dark"] .profile-save:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .profile-notice { color: #4ADE80; }
+        html[data-theme="dark"] .profile-notice.error { color: #FF6B8E; }
+        html[data-theme="dark"] .profile-legal-btn { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); color: #F2F2F7; }
+        html[data-theme="dark"] .profile-legal-btn:hover { border-color: #FF3366; }
+
+        /* Inicio de sesión */
+        html[data-theme="dark"] .auth-overlay { background: rgba(14,16,22,.74); }
+        html[data-theme="dark"] .auth-card { background: rgba(28,31,41,.86); border-color: rgba(255,255,255,.12); box-shadow: 0 28px 70px rgba(0,0,0,.55); }
+        html[data-theme="dark"] .auth-title { color: #F2F2F7; }
+        html[data-theme="dark"] .auth-subtitle,
+        html[data-theme="dark"] .verify-spam-note { color: rgba(235,235,245,.62); }
+        html[data-theme="dark"] .auth-tabs { background: rgba(255,255,255,.07); }
+        html[data-theme="dark"] .auth-tab { color: rgba(235,235,245,.6); }
+        html[data-theme="dark"] .auth-tab.active { color: #fff; background: rgba(255,255,255,.14); box-shadow: 0 3px 8px rgba(0,0,0,.3); }
+        html[data-theme="dark"] .auth-submit { background: #F2F2F7; color: #1C1C1E; }
+        html[data-theme="dark"] .auth-submit:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .auth-error { color: #FF6B8E; }
+        html[data-theme="dark"] .otp-digit { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.16); color: #F2F2F7; }
+        html[data-theme="dark"] .otp-change-email,
+        html[data-theme="dark"] .auth-link { color: #FF6B8E; }
+        html[data-theme="dark"] .auth-check { color: rgba(235,235,245,.78); }
+
+        /* Términos, cookies y tutorial */
+        html[data-theme="dark"] .terms-dialog { background: rgba(0,0,0,.66); }
+        html[data-theme="dark"] .terms-card { background: #1E212B; color: #F2F2F7; box-shadow: 0 25px 80px rgba(0,0,0,.6); }
+        html[data-theme="dark"] .terms-close { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.14); color: #F2F2F7; }
+        html[data-theme="dark"] .terms-close:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .cookie-banner { background: rgba(28,31,41,.97); border-color: rgba(255,255,255,.12); color: #F2F2F7; box-shadow: 0 18px 55px rgba(0,0,0,.55); }
+        html[data-theme="dark"] .cookie-banner p { color: rgba(235,235,245,.72); }
+        html[data-theme="dark"] .cookie-banner a,
+        html[data-theme="dark"] .cookie-policy-link,
+        html[data-theme="dark"] .cookie-settings-link { color: #FF8FA8; }
+        html[data-theme="dark"] .cookie-action { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.16); color: #F2F2F7; }
+        html[data-theme="dark"] .cookie-action:hover { border-color: #FF3366; }
+        html[data-theme="dark"] .cookie-action.primary { background: #F2F2F7; border-color: #F2F2F7; color: #1C1C1E; }
+        html[data-theme="dark"] .cookie-action.primary:hover { background: #FF3366; border-color: #FF3366; color: #fff; }
+        html[data-theme="dark"] .cookie-settings-link,
+        html[data-theme="dark"] .legal-info-link { background: rgba(30,33,43,.88); border-color: rgba(255,255,255,.14); color: #F2F2F7; }
+        html[data-theme="dark"] .cookie-preference-row { background: rgba(255,255,255,.05); border-color: rgba(255,255,255,.12); }
+        html[data-theme="dark"] .cookie-preference-row span { color: rgba(235,235,245,.68); }
+        html[data-theme="dark"] .cookie-required { color: #4ADE80; }
+        html[data-theme="dark"] .tour-card { background: #1E212B; color: #F2F2F7; box-shadow: 0 18px 50px rgba(0,0,0,.6); }
+        html[data-theme="dark"] .tour-text { color: rgba(235,235,245,.82); }
+        html[data-theme="dark"] .tour-text b { color: #fff; }
+        html[data-theme="dark"] .tour-links a { color: #F2F2F7; background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
+        html[data-theme="dark"] .tour-links a:hover { border-color: #FF3366; background: rgba(255,51,102,.14); }
+        html[data-theme="dark"] .tour-links a.rec { border-color: #FF3366; background: rgba(255,51,102,.14); }
+        html[data-theme="dark"] .tour-links a small { color: rgba(235,235,245,.6); }
+        html[data-theme="dark"] .tour-dots i { background: rgba(255,255,255,.2); }
+        html[data-theme="dark"] .tour-dots i.on { background: #FF3366; }
+        html[data-theme="dark"] .tour-btn.primary { background: #F2F2F7; color: #1C1C1E; }
+        html[data-theme="dark"] .tour-btn.primary:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .tour-btn.ghost { color: #F2F2F7; background: rgba(255,255,255,.1); }
+        html[data-theme="dark"] .tour-skip { color: rgba(235,235,245,.62); }
+
+        /* --- Nombre de usuario y avatar --- */
+        [data-color="rosa"] { --av: linear-gradient(135deg, #ffbed0, #ffd9a8); }
+        [data-color="melocoton"] { --av: linear-gradient(135deg, #ffcfa3, #ff9f7a); }
+        [data-color="limon"] { --av: linear-gradient(135deg, #fff0a3, #ffd166); }
+        [data-color="menta"] { --av: linear-gradient(135deg, #b9f0d2, #6fd9c4); }
+        [data-color="cielo"] { --av: linear-gradient(135deg, #bfe3ff, #8fb8ff); }
+        [data-color="violeta"] { --av: linear-gradient(135deg, #d9ccff, #b79cff); }
+        .profile-avatar[data-color] { background: var(--av); color: #1C1C1E; transition: border-radius .2s ease; }
+        .profile-avatar[data-shape="circulo"] { border-radius: 50%; }
+        .profile-avatar[data-shape="suave"] { border-radius: 14px; }
+        .profile-avatar[data-shape="cuadrado"] { border-radius: 6px; }
+        .profile-avatar[data-shape="hoja"] { border-radius: 50% 10px 50% 10px; }
+        .account-edit { margin-top: 10px; }
+        .account-edit > summary { display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; color: #1C1C1E; font: 800 12px 'Plus Jakarta Sans', sans-serif; }
+        .account-edit > summary::-webkit-details-marker { display: none; }
+        .account-edit > summary::after { content: "▾"; color: #FF3366; transition: transform .2s; }
+        .account-edit[open] > summary::after { transform: rotate(180deg); }
+        .account-edit-body { margin-top: 12px; }
+        .account-row { display: flex; gap: 8px; }
+        .account-row .profile-input { flex: 1; min-width: 0; }
+        .account-save { flex: 0 0 auto; padding: 0 14px; border: 0; border-radius: 12px; color: #fff; background: #1C1C1E; cursor: pointer; font: 800 12px 'Plus Jakarta Sans', sans-serif; transition: background .2s; }
+        .account-save:hover { background: #FF3366; }
+        .account-save:disabled { opacity: .6; cursor: default; }
+        .avatar-options { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 2px; }
+        .avatar-swatch { width: 28px; height: 28px; padding: 0; border-radius: 50%; border: 1px solid rgba(28,28,30,.14); background: var(--av); cursor: pointer; transition: transform .15s; }
+        .avatar-swatch:hover { transform: scale(1.1); }
+        .avatar-swatch[aria-pressed="true"] { outline: 2px solid #FF3366; outline-offset: 2px; }
+        .avatar-shape { width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border-radius: 10px; border: 1px solid rgba(28,28,30,.12); background: rgba(255,255,255,.6); cursor: pointer; transition: border-color .15s, transform .15s; }
+        .avatar-shape:hover { transform: scale(1.06); }
+        .avatar-shape span { display: block; width: 16px; height: 16px; background: rgba(28,28,30,.55); }
+        .avatar-shape[data-shape="circulo"] span { border-radius: 50%; }
+        .avatar-shape[data-shape="suave"] span { border-radius: 5px; }
+        .avatar-shape[data-shape="cuadrado"] span { border-radius: 2px; }
+        .avatar-shape[data-shape="hoja"] span { border-radius: 50% 3px 50% 3px; }
+        .avatar-shape[aria-pressed="true"] { border-color: #FF3366; box-shadow: 0 0 0 2px rgba(255,51,102,.25); }
+        .avatar-swatch:focus-visible, .avatar-shape:focus-visible { outline: 2px solid #FF3366; outline-offset: 2px; }
+        html[data-theme="dark"] .account-edit > summary { color: #F2F2F7; }
+        html[data-theme="dark"] .account-save { background: #F2F2F7; color: #1C1C1E; }
+        html[data-theme="dark"] .account-save:hover { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .avatar-swatch { border-color: rgba(255,255,255,.2); }
+        html[data-theme="dark"] .avatar-shape { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); }
+        html[data-theme="dark"] .avatar-shape span { background: rgba(242,242,247,.65); }
+        html[data-theme="dark"] .avatar-shape[aria-pressed="true"] { border-color: #FF3366; }
     </style>
     <script type="importmap">
         {
@@ -992,6 +1226,41 @@
         <h1>Omni Wifu</h1>
         <p>Omni Wifu es una web para chatear con avatares 3D de inteligencia artificial (Nino, Hatsune Miku, Luna y Mia) con voz y animaciones, directamente desde el navegador. Necesitas activar JavaScript para usarla.</p>
     </noscript>
+    <button class="theme-toggle-btn" id="theme-toggle-btn" type="button" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+    </button>
+    <script>
+        (function () {
+            var btn = document.getElementById('theme-toggle-btn');
+            if (!btn) return;
+            var root = document.documentElement;
+            function isDark() { return root.getAttribute('data-theme') === 'dark'; }
+            function saved() { try { var s = localStorage.getItem('omni-theme'); return (s === 'light' || s === 'dark') ? s : null; } catch (e) { return null; } }
+            function sync() {
+                var dark = isDark();
+                var label = dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro';
+                btn.setAttribute('aria-pressed', dark ? 'true' : 'false');
+                btn.setAttribute('aria-label', label);
+                btn.title = label;
+                var meta = document.querySelector('meta[name="theme-color"]');
+                if (meta) meta.setAttribute('content', dark ? '#161922' : '#1F2430');
+            }
+            function apply(theme, persist) {
+                root.setAttribute('data-theme', theme);
+                if (persist) { try { localStorage.setItem('omni-theme', theme); } catch (e) {} }
+                sync();
+                window.dispatchEvent(new Event('omni-theme-change'));
+            }
+            btn.addEventListener('click', function () { apply(isDark() ? 'light' : 'dark', true); });
+            try {
+                var mq = window.matchMedia('(prefers-color-scheme: dark)');
+                var follow = function (e) { if (!saved()) apply(e.matches ? 'dark' : 'light', false); };
+                if (mq.addEventListener) mq.addEventListener('change', follow); else if (mq.addListener) mq.addListener(follow);
+            } catch (e) {}
+            sync();
+        })();
+    </script>
     <section class="cookie-banner" id="cookie-banner" role="dialog" aria-modal="false" aria-labelledby="cookie-banner-title" aria-describedby="cookie-banner-copy" hidden>
         <h2 id="cookie-banner-title">Tu privacidad, a tu manera 🍪</h2>
         <p id="cookie-banner-copy">Usamos una cookie técnica para mantener la sesión mientras navegas. Si aceptas, también recordaremos tu inicio de sesión en este navegador durante un máximo de 30 días. Si rechazas, la sesión terminará al cerrar el navegador. La aplicación no integra herramientas de analítica ni publicidad. Puedes <button class="cookie-policy-link" id="cookie-open-policy" type="button">leer la política de privacidad y cookies</button>.</p>
@@ -1025,9 +1294,37 @@
             <p class="config-subtitle">Tus claves quedan vinculadas a esta cuenta.</p>
         </div>
         <div class="profile-user-card">
-            <div class="profile-avatar">✦</div>
+            <div class="profile-avatar" id="profile-avatar" data-color="rosa" data-shape="suave">✦</div>
             <div><div class="profile-username" id="profile-username">Usuario</div><div class="profile-status">● Sesión activa</div></div>
         </div>
+        <details class="profile-section account-edit" id="account-edit">
+            <summary>Editar nombre y avatar</summary>
+            <div class="account-edit-body">
+                <label class="profile-label" for="account-username">Nombre de usuario</label>
+                <div class="account-row">
+                    <input class="profile-input" id="account-username" type="text" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false">
+                    <button class="account-save" id="account-save-btn" type="button">Guardar</button>
+                </div>
+                <p class="profile-help" id="account-username-help">3-20 caracteres: letras, números, _ . y -. Solo puedes cambiarlo una vez cada 7 días.</p>
+                <label class="profile-label">Color del avatar</label>
+                <div class="avatar-options" id="avatar-colors">
+                    <button class="avatar-swatch" type="button" data-color="rosa" title="Rosa" aria-label="Rosa" aria-pressed="true"></button>
+                    <button class="avatar-swatch" type="button" data-color="melocoton" title="Melocotón" aria-label="Melocotón" aria-pressed="false"></button>
+                    <button class="avatar-swatch" type="button" data-color="limon" title="Limón" aria-label="Limón" aria-pressed="false"></button>
+                    <button class="avatar-swatch" type="button" data-color="menta" title="Menta" aria-label="Menta" aria-pressed="false"></button>
+                    <button class="avatar-swatch" type="button" data-color="cielo" title="Cielo" aria-label="Cielo" aria-pressed="false"></button>
+                    <button class="avatar-swatch" type="button" data-color="violeta" title="Violeta" aria-label="Violeta" aria-pressed="false"></button>
+                </div>
+                <label class="profile-label">Forma del avatar</label>
+                <div class="avatar-options" id="avatar-shapes">
+                    <button class="avatar-shape" type="button" data-shape="circulo" title="Círculo" aria-label="Círculo" aria-pressed="false"><span></span></button>
+                    <button class="avatar-shape" type="button" data-shape="suave" title="Redondeada" aria-label="Redondeada" aria-pressed="true"><span></span></button>
+                    <button class="avatar-shape" type="button" data-shape="cuadrado" title="Cuadrada" aria-label="Cuadrada" aria-pressed="false"><span></span></button>
+                    <button class="avatar-shape" type="button" data-shape="hoja" title="Hoja" aria-label="Hoja" aria-pressed="false"><span></span></button>
+                </div>
+                <div class="profile-notice" id="account-notice" role="status"></div>
+            </div>
+        </details>
         <div class="profile-section">
             <label class="profile-label" for="tts-provider-select">Motor de voz</label>
             <select class="profile-select" id="tts-provider-select">
@@ -1308,7 +1605,18 @@
         const light = new THREE.DirectionalLight(0xffffff, 1.25);
         light.position.set(1.5, 3.5, 2).normalize();
         scene.add(light);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+        scene.add(ambientLight);
+
+        // Fondo e iluminación de la escena según el modo claro/oscuro.
+        function applySceneTheme() {
+            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+            scene.background = new THREE.Color(dark ? 0x161922 : 0xE8EEF3);
+            light.intensity = dark ? 1.05 : 1.25;
+            ambientLight.intensity = dark ? 0.55 : 0.65;
+        }
+        applySceneTheme();
+        window.addEventListener('omni-theme-change', applySceneTheme);
 
         let currentVrm = undefined;
         let modelLoadId = 0;
@@ -3489,7 +3797,10 @@
         function renderKeyList(name, values) {
             const box = keyListBox(name);
             box.replaceChildren();
-            (values && values.length ? values : ['']).forEach(v => box.appendChild(buildKeyRow(name, v)));
+            const list = (values && values.length ? values : ['']).slice();
+            // Por defecto solo se muestra 1 slot: se quitan los huecos vacíos del final (con + se añaden más).
+            while (list.length > 1 && !String(list[list.length - 1] || '').trim()) list.pop();
+            list.forEach(v => box.appendChild(buildKeyRow(name, v)));
             renumberKeys(name);
         }
         function readKeyList(name) {
@@ -3563,9 +3874,101 @@
             populateChatModels(chatProviderSelect.value, chatModelSelect.value);
         }).catch(() => { /* se usa el catálogo incluido */ });
 
+        // ── Nombre de usuario y avatar (solo color y forma) ──
+        const AVATAR_COLORS = ['rosa', 'melocoton', 'limon', 'menta', 'cielo', 'violeta'];
+        const AVATAR_SHAPES = ['circulo', 'suave', 'cuadrado', 'hoja'];
+        const USERNAME_RULE = /^[A-Za-z0-9][A-Za-z0-9_.-]{1,18}[A-Za-z0-9]$/;
+        const USERNAME_HELP = '3-20 caracteres: letras, números, _ . y -. Solo puedes cambiarlo una vez cada 7 días.';
+        const profileAvatarEl = document.getElementById('profile-avatar');
+        const accountUsernameInput = document.getElementById('account-username');
+        const accountSaveBtn = document.getElementById('account-save-btn');
+        const accountNotice = document.getElementById('account-notice');
+        const accountHelp = document.getElementById('account-username-help');
+        let avatarStyle = { color: 'rosa', shape: 'suave' };
+
+        function formatWait(seconds) {
+            if (seconds >= 86400) { const d = Math.ceil(seconds / 86400); return d + (d === 1 ? ' día' : ' días'); }
+            const h = Math.max(1, Math.ceil(seconds / 3600));
+            return h + (h === 1 ? ' hora' : ' horas');
+        }
+        function setAccountNotice(text, isError) {
+            accountNotice.textContent = text || '';
+            accountNotice.classList.toggle('error', !!isError);
+        }
+        function applyAvatarStyle(raw) {
+            const [c, s] = String(raw || '').split(':');
+            avatarStyle = {
+                color: AVATAR_COLORS.includes(c) ? c : 'rosa',
+                shape: AVATAR_SHAPES.includes(s) ? s : 'suave'
+            };
+            profileAvatarEl.dataset.color = avatarStyle.color;
+            profileAvatarEl.dataset.shape = avatarStyle.shape;
+            document.querySelectorAll('.avatar-swatch').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.color === avatarStyle.color)));
+            document.querySelectorAll('.avatar-shape').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.shape === avatarStyle.shape)));
+        }
+        function refreshAccountUi(p) {
+            applyAvatarStyle(p.avatar_style);
+            if (document.activeElement !== accountUsernameInput) accountUsernameInput.value = p.username || '';
+            const wait = Number(p.username_wait_seconds) || 0;
+            accountHelp.textContent = wait > 0 ? `Podrás volver a cambiar tu nombre en ${formatWait(wait)}.` : USERNAME_HELP;
+        }
+        // Actualiza solo el nombre y el avatar: no toca las claves que estés editando en el perfil.
+        function applyAccountProfile(p) {
+            let seen = null;
+            try { seen = localStorage.getItem(tourSeenKey()); } catch (e) { /* sin almacenamiento */ }
+            profile = Object.assign({}, profile || {}, { username: p.username, avatar_style: p.avatar_style, username_wait_seconds: p.username_wait_seconds });
+            profileUsername.textContent = p.username;
+            // El tutorial ya visto se guarda por nombre: se traslada al nombre nuevo para que no vuelva a salir.
+            if (seen) { try { localStorage.setItem(tourSeenKey(), seen); } catch (e) { /* sin almacenamiento */ } }
+            refreshAccountUi(p);
+        }
+        async function postAccount(payload) {
+            const { res, data } = await apiFetch('/api/account', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+            });
+            if (res.status === 401) { showAuth(); return null; }
+            if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo guardar el cambio.');
+            return data.profile;
+        }
+        async function saveUsername() {
+            const wanted = accountUsernameInput.value.trim();
+            if (profile && wanted === profile.username) { setAccountNotice('Ese ya es tu nombre.', true); return; }
+            if (!USERNAME_RULE.test(wanted)) {
+                setAccountNotice('Usa entre 3 y 20 caracteres (letras, números, _ . -), empezando y acabando en letra o número.', true);
+                return;
+            }
+            accountSaveBtn.disabled = true;
+            setAccountNotice('Guardando…');
+            try {
+                const updated = await postAccount({ username: wanted });
+                if (updated) { applyAccountProfile(updated); setAccountNotice('Nombre actualizado ✓'); }
+            } catch (error) {
+                setAccountNotice(error.message || 'No se pudo conectar con el servidor.', true);
+            } finally {
+                accountSaveBtn.disabled = false;
+            }
+        }
+        async function saveAvatar(next) {
+            const previous = avatarStyle.color + ':' + avatarStyle.shape;
+            applyAvatarStyle(next.color + ':' + next.shape);
+            setAccountNotice('');
+            try {
+                const updated = await postAccount({ avatar_style: next.color + ':' + next.shape });
+                if (updated) applyAccountProfile(updated);
+            } catch (error) {
+                applyAvatarStyle(previous);
+                setAccountNotice(error.message || 'No se pudo guardar el avatar.', true);
+            }
+        }
+        accountSaveBtn.addEventListener('click', saveUsername);
+        accountUsernameInput.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); saveUsername(); } });
+        document.querySelectorAll('.avatar-swatch').forEach(b => b.addEventListener('click', () => saveAvatar({ color: b.dataset.color, shape: avatarStyle.shape })));
+        document.querySelectorAll('.avatar-shape').forEach(b => b.addEventListener('click', () => saveAvatar({ color: avatarStyle.color, shape: b.dataset.shape })));
+
         function fillProfile(nextProfile) {
             profile = nextProfile;
             profileUsername.textContent = nextProfile.username;
+            refreshAccountUi(nextProfile);
             if (ttsProviderSelect) {
                 ttsProviderSelect.value = nextProfile.tts_provider || 'gemini';
             }

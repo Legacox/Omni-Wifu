@@ -477,7 +477,9 @@ def init_db():
         for column, definition in (("email", "TEXT NOT NULL DEFAULT ''"), ("email_verified", "INTEGER NOT NULL DEFAULT 0"),
                                    ("terms_accepted_at", "TEXT"), ("terms_version", "TEXT"),
                                    ("chat_provider", "TEXT NOT NULL DEFAULT 'gemini'"), ("chat_model", "TEXT NOT NULL DEFAULT ''"),
-                                   ("provider_keys", "TEXT NOT NULL DEFAULT '{}'"), ("gemini_voice_key", "TEXT NOT NULL DEFAULT ''")):
+                                   ("provider_keys", "TEXT NOT NULL DEFAULT '{}'"), ("gemini_voice_key", "TEXT NOT NULL DEFAULT ''"),
+                                   ("avatar_style", "TEXT NOT NULL DEFAULT ''"),
+                                   ("username_changed_at", "DOUBLE PRECISION NOT NULL DEFAULT 0")):
             try:
                 db_execute(conn, f"ALTER TABLE users ADD COLUMN {column} {definition}")
             except Exception:
@@ -691,7 +693,10 @@ def lista_claves(user, nombre):
     if isinstance(valor, str) and valor.strip():
         return [valor.strip()]
     if nombre == "gemini":
-        return [str(_u(user, f"gemini_key_{i}", "") or "").strip() for i in range(1, 6)]
+        antiguas = [str(_u(user, f"gemini_key_{i}", "") or "").strip() for i in range(1, 6)]
+        while len(antiguas) > 1 and not antiguas[-1]:
+            antiguas.pop()  # una cuenta nueva empieza con 1 slot, no con 5 vacíos
+        return antiguas
     if nombre == "voice_gemini":
         return [str(_u(user, "gemini_voice_key", "") or "").strip()]
     if nombre == "fish":
@@ -740,8 +745,11 @@ def public_profile(user):
         pass
     listas = {nombre: lista_claves(user, nombre) for nombre in ("gemini", "voice_gemini", "fish") + PROVIDERS_CON_CLAVE}
     primera = lambda lista: next((k for k in lista if k), "")
+    cambiado = float(_u(user, "username_changed_at", 0) or 0)
     return {
         "username": user["username"],
+        "avatar_style": _u(user, "avatar_style", "") or "",
+        "username_wait_seconds": max(0, int(cambiado + USERNAME_COOLDOWN_SECONDS - time.time())) if cambiado else 0,
         "session_active": True,
         "tts_provider": tts_prov,
         "chat_provider": _u(user, "chat_provider", "gemini") or "gemini",
@@ -1955,6 +1963,85 @@ def api_profile():
         if pref_key[0] == user["id"]:
             del CLAVE_PREFERIDA[pref_key]
     return json_response({"status": "ok", "profile": public_profile(updated_user)})
+
+
+# --- NOMBRE DE USUARIO Y AVATAR ---
+
+# Límites del nombre: 3-20 caracteres, empieza y acaba en letra o número; letras, números, "_", "." y "-".
+USERNAME_CHANGE_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{1,18}[A-Za-z0-9]")
+# Para que no sature ni se abuse, solo se puede cambiar una vez cada 7 días (se ajusta con USERNAME_COOLDOWN_HOURS; 0 = sin espera).
+try:
+    USERNAME_COOLDOWN_SECONDS = max(0, int(float(os.environ.get("USERNAME_COOLDOWN_HOURS", "168")) * 3600))
+except ValueError:
+    USERNAME_COOLDOWN_SECONDS = 168 * 3600
+RESERVED_USERNAMES = {
+    "admin", "administrador", "administrator", "root", "soporte", "support", "moderador", "moderator", "mod",
+    "omni", "omniwifu", "omniwaifu", "nino", "ninoia", "miku", "hatsunemiku", "luna", "mia", "claude", "anthropic",
+    "gemini", "system", "sistema", "staff", "null", "undefined", "api", "www", "ayuda", "help", "owner",
+}
+# El avatar solo cambia de color y de forma: valores cerrados, nada que subir ni que guardar en grande.
+AVATAR_COLORS = ("rosa", "melocoton", "limon", "menta", "cielo", "violeta")
+AVATAR_SHAPES = ("circulo", "suave", "cuadrado", "hoja")
+
+
+def _espera_legible(segundos):
+    if segundos >= 86400:
+        dias = -(-segundos // 86400)
+        return f"{dias} día{'s' if dias != 1 else ''}"
+    horas = max(1, -(-segundos // 3600))
+    return f"{horas} hora{'s' if horas != 1 else ''}"
+
+
+@server_app.route("/api/account", method=["POST", "PUT", "OPTIONS"])
+def api_account():
+    """Cambia el nombre de usuario y/o el color y la forma del avatar de la cuenta."""
+    if request.method == "OPTIONS":
+        return json_response({})
+    user = require_user()
+    if not user:
+        return json_response({"status": "error", "message": "Sesión no válida."}, 401)
+    data = request_data()
+    cambios_avatar = None
+    nuevo_nombre = None
+
+    if "avatar_style" in data:
+        partes = str(data.get("avatar_style") or "").strip().lower().split(":")
+        if len(partes) != 2 or partes[0] not in AVATAR_COLORS or partes[1] not in AVATAR_SHAPES:
+            return json_response({"status": "error", "message": "Ese avatar no es válido."}, 400)
+        cambios_avatar = f"{partes[0]}:{partes[1]}"
+
+    if "username" in data:
+        nuevo_nombre = str(data.get("username") or "").strip()
+        if nuevo_nombre == user["username"]:
+            nuevo_nombre = None  # sin cambios: no se gasta la espera
+        else:
+            if not USERNAME_CHANGE_RE.fullmatch(nuevo_nombre):
+                return json_response({"status": "error", "message": "El nombre debe tener entre 3 y 20 caracteres (letras, números, _ . -) y empezar y acabar en letra o número."}, 400)
+            if re.sub(r"[_.\-]", "", nuevo_nombre.lower()) in RESERVED_USERNAMES:
+                return json_response({"status": "error", "message": "Ese nombre está reservado. Elige otro."}, 400)
+            cambiado = float(_u(user, "username_changed_at", 0) or 0)
+            restante = int(cambiado + USERNAME_COOLDOWN_SECONDS - time.time()) if cambiado else 0
+            if restante > 0 and nuevo_nombre.lower() != user["username"].lower():
+                return json_response({"status": "error", "message": f"Podrás volver a cambiar tu nombre en {_espera_legible(restante)}."}, 429)
+
+    try:
+        with db_connection() as conn:
+            if nuevo_nombre:
+                if db_execute(conn, "SELECT id FROM users WHERE LOWER(username) = LOWER(?) AND id <> ?", (nuevo_nombre, user["id"])).fetchone():
+                    return json_response({"status": "error", "message": "Ese nombre de usuario ya está en uso."}, 409)
+                if db_execute(conn, "SELECT 1 FROM email_verifications WHERE LOWER(username) = LOWER(?) AND expires_at > ?", (nuevo_nombre, time.time())).fetchone():
+                    return json_response({"status": "error", "message": "Ese nombre de usuario ya está en uso."}, 409)
+                db_execute(conn, "UPDATE users SET username = ?, username_changed_at = ? WHERE id = ?", (nuevo_nombre, time.time(), user["id"]))
+            if cambios_avatar is not None:
+                db_execute(conn, "UPDATE users SET avatar_style = ? WHERE id = ?", (cambios_avatar, user["id"]))
+            actualizado = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+    except Exception as error_cuenta:
+        texto_error = str(error_cuenta).lower()
+        if "unique" in texto_error or "duplicate" in texto_error:
+            return json_response({"status": "error", "message": "Ese nombre de usuario ya está en uso."}, 409)
+        print(f"[Cuenta] No se pudo actualizar la cuenta: {str(error_cuenta)[:200]}")
+        return json_response({"status": "error", "message": "No se pudo guardar el cambio. Inténtalo de nuevo."}, 500)
+    return json_response({"status": "ok", "profile": public_profile(actualizado)})
 
 
 @server_app.route("/api/chat", method=["POST", "OPTIONS"])
