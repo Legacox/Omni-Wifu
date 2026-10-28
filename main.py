@@ -29,27 +29,33 @@ from google.genai import types
 
 
 def _cargar_env():
-    """Lee un archivo .env junto a main.py (DATABASE_URL, SUPABASE_URL, SUPABASE_KEY, FISH_MODEL...) sin pisar
-    variables ya definidas en el sistema. Así funciona igual al abrir Iniciar_Nino.bat que desde la terminal."""
-    ruta = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
-    if not os.path.isfile(ruta):
-        return
-    try:
-        with open(ruta, encoding="utf-8-sig") as archivo:
-            for linea in archivo:
-                linea = linea.strip()
-                if not linea or linea.startswith("#") or "=" not in linea:
-                    continue
-                clave, valor = linea.split("=", 1)
-                clave = clave.replace("export ", "", 1).strip()
-                valor = valor.strip()
-                if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in "\"'":
-                    valor = valor[1:-1]
-                if clave and clave not in os.environ:
-                    os.environ[clave] = valor
-        print("[Config] Variables cargadas desde .env")
-    except Exception as error:
-        print(f"[Config] No se pudo leer .env: {error}")
+    """Lee un archivo .env junto a main.py, en el directorio de trabajo o en /etc/secrets/.env (Render Secret Files)
+    sin pisar variables ya definidas en el sistema."""
+    rutas = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+        os.path.join(os.getcwd(), ".env"),
+        "/etc/secrets/.env"
+    ]
+    for ruta in rutas:
+        if not os.path.isfile(ruta):
+            continue
+        try:
+            with open(ruta, encoding="utf-8-sig") as archivo:
+                for linea in archivo:
+                    linea = linea.strip()
+                    if not linea or linea.startswith("#") or "=" not in linea:
+                        continue
+                    clave, valor = linea.split("=", 1)
+                    clave = clave.replace("export ", "", 1).strip()
+                    valor = valor.strip()
+                    if len(valor) >= 2 and valor[0] == valor[-1] and valor[0] in ('"', "'"):
+                        valor = valor[1:-1]
+                    if clave and clave not in os.environ:
+                        os.environ[clave] = valor
+            print(f"[Config] Variables cargadas desde: {ruta}")
+            break
+        except Exception as error:
+            print(f"[Config] No se pudo leer {ruta}: {error}")
 
 
 _cargar_env()
@@ -121,7 +127,100 @@ if _raw_db_url and "supabase" in _raw_db_url and "sslmode=" not in _raw_db_url:
     _raw_db_url += ("&" if "?" in _raw_db_url else "?") + "sslmode=require"
 DATABASE_URL = _raw_db_url
 
-# Modo PostgreSQL si existe DATABASE_URL y algún driver disponible
+import urllib.parse
+
+def _resolver_database_url(url_inicial):
+    """
+    Supabase migró las conexiones directas (db.<ref>.supabase.co) exclusivamente a IPv6.
+    Como Render y muchos servicios solo tienen IPv4, conectar a db.<ref>.supabase.co falla o se congela.
+    Esta función prueba la URL actual; si falla o es directa, prueba automáticamente los poolers IPv4
+    de Supabase (aws-0-<region>.pooler.supabase.com) buscando la región correcta donde está alojado el proyecto.
+    """
+    if not url_inicial or (psycopg is None and psycopg2 is None):
+        return url_inicial
+
+    # 1. Si la URL ya conecta bien, conservarla
+    try:
+        if psycopg is not None:
+            with psycopg.connect(url_inicial, prepare_threshold=None, connect_timeout=4) as test_conn:
+                with test_conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+        else:
+            with psycopg2.connect(url_inicial, connect_timeout=4) as test_conn:
+                with test_conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+        return url_inicial
+    except Exception as err_ini:
+        print(f"[BD] Aviso: la conexión inicial con PostgreSQL falló: {str(err_ini)[:160]}")
+
+    if "supabase" not in url_inicial:
+        return url_inicial
+
+    # 2. Extraer parámetros
+    try:
+        parsed = urllib.parse.urlparse(url_inicial)
+        user = parsed.username or "postgres"
+        password = parsed.password or ""
+        hostname = parsed.hostname or ""
+        dbname = parsed.path.lstrip("/") or "postgres"
+    except Exception:
+        return url_inicial
+
+    project_ref = None
+    m = re.search(r'db\.([a-z0-9]+)\.supabase\.co', hostname)
+    if m:
+        project_ref = m.group(1)
+    elif "pooler.supabase.com" in hostname and "." in user:
+        project_ref = user.split(".", 1)[1]
+    elif os.environ.get("SUPABASE_URL"):
+        m_sb = re.search(r'https?://([a-z0-9]+)\.supabase\.co', os.environ["SUPABASE_URL"])
+        if m_sb:
+            project_ref = m_sb.group(1)
+
+    if not project_ref or not password:
+        return url_inicial
+
+    regiones = [
+        "eu-central-1",  # Fráncfort (Alemania)
+        "eu-west-1",     # Irlanda
+        "eu-west-3",     # París
+        "eu-west-2",     # Londres
+        "us-east-1",     # N. Virginia
+        "us-east-2",     # Ohio
+        "us-west-1",     # California
+        "sa-east-1",     # São Paulo
+        "ap-southeast-1" # Singapur
+    ]
+
+    usuario_pooler = f"postgres.{project_ref}"
+    pass_codificado = urllib.parse.quote_plus(password)
+    print(f"[BD] Probando poolers IPv4 de Supabase para el proyecto '{project_ref}'...")
+
+    for region in regiones:
+        host_pooler = f"aws-0-{region}.pooler.supabase.com"
+        for puerto in (5432, 6543):
+            candidata = f"postgresql://{usuario_pooler}:{pass_codificado}@{host_pooler}:{puerto}/{dbname}?sslmode=require"
+            try:
+                if psycopg is not None:
+                    with psycopg.connect(candidata, prepare_threshold=None, connect_timeout=4) as conn_test:
+                        with conn_test.cursor() as cur:
+                            cur.execute("SELECT 1")
+                else:
+                    with psycopg2.connect(candidata, connect_timeout=4) as conn_test:
+                        with conn_test.cursor() as cur:
+                            cur.execute("SELECT 1")
+                print(f"[BD] ¡Conexión exitosa con Supabase a través del pooler IPv4 ({region}:{puerto})!")
+                return candidata
+            except Exception:
+                continue
+
+    print("[BD] No se pudo encontrar un pooler alternativo funcional.")
+    return url_inicial
+
+# Intentar resolver automáticamente la conexión a Supabase si es necesario
+if DATABASE_URL and (psycopg is not None or psycopg2 is not None):
+    DATABASE_URL = _resolver_database_url(DATABASE_URL)
+
 USING_POSTGRES = bool(DATABASE_URL) and (psycopg is not None or psycopg2 is not None)
 if DATABASE_URL and not USING_POSTGRES:
     print("[BD] AVISO: DATABASE_URL está definida pero no hay driver de PostgreSQL. Instala: pip install \"psycopg[binary]\". "
@@ -530,32 +629,66 @@ def explicar_error_postgres(error):
     return "Revisa DATABASE_URL (copia de nuevo la cadena del Session pooler) y el estado del proyecto en Supabase."
 
 
+def _migrar_cuentas_locales_a_supabase():
+    """Copia cuentas de la base local users.db a Supabase si no existen allí."""
+    if not USING_POSTGRES or not os.path.isfile(DATABASE_PATH):
+        return
+    try:
+        with sqlite3.connect(DATABASE_PATH) as local_conn:
+            local_conn.row_factory = sqlite3.Row
+            rows = local_conn.execute("SELECT * FROM users").fetchall()
+        if not rows:
+            return
+        with db_connection() as pg_conn:
+            for r in rows:
+                datos = dict(r)
+                username = datos.get("username", "")
+                email = datos.get("email", "")
+                if not username:
+                    continue
+                existe = db_execute(pg_conn, "SELECT id FROM users WHERE LOWER(username) = LOWER(?) OR (email <> '' AND LOWER(email) = LOWER(?))", (username, email)).fetchone()
+                if not existe:
+                    cols = [k for k in datos.keys() if k != "id"]
+                    placeholders = ", ".join(["?"] * len(cols))
+                    cols_str = ", ".join(cols)
+                    db_execute(pg_conn, f"INSERT INTO users ({cols_str}) VALUES ({placeholders})", [datos[c] for c in cols])
+                    print(f"[BD] Cuenta local migrada automáticamente a Supabase: {username}")
+    except Exception as mig_err:
+        print(f"[BD] Nota sobre sincronización inicial: {mig_err}")
+
+
 def _init_db_safe():
-    """Intenta inicializar PostgreSQL (con reintentos); si sigue fallando, usa SQLite pero avisando muy claro,
-    porque en Render ese SQLite se borra en cada despliegue y los usuarios y claves se perderían."""
-    global USING_POSTGRES
+    """Intenta inicializar PostgreSQL en Supabase. Si la conexión inicial falla, reintenta
+    resolviendo el pooler IPv4. Solo si todo falla, usa SQLite como respaldo."""
+    global USING_POSTGRES, DATABASE_URL
     if USING_POSTGRES:
-        ultimo = None
-        for intento in range(1, 4):
-            try:
-                init_db()
-                return
-            except Exception as _pg_init_err:
-                ultimo = _pg_init_err
-                print(f"[BD] Intento {intento}/3 de conectar con PostgreSQL falló: {str(_pg_init_err)[:200]}")
-                if intento < 3:
-                    time.sleep(3)
-        barra = "!" * 78
-        print(barra)
-        print("[BD] NO SE PUEDE CONECTAR CON SUPABASE: los usuarios y las claves API NO se están guardando allí.")
-        print(f"[BD] Error: {str(ultimo)[:300]}")
-        print(f"[BD] Causa probable: {explicar_error_postgres(ultimo)}")
-        print("[BD] Mientras tanto se usa SQLite temporal (en Render se BORRA en cada reinicio o despliegue).")
-        print(barra)
-        USING_POSTGRES = False
-        init_db()
+        try:
+            init_db()
+            print("[BD] ¡Base de datos PostgreSQL/Supabase conectada e inicializada!")
+            _migrar_cuentas_locales_a_supabase()
+            return
+        except Exception as _pg_init_err:
+            print(f"[BD] Reintentando resolución de pooler tras error: {_pg_init_err}")
+            nueva_url = _resolver_database_url(DATABASE_URL)
+            if nueva_url and nueva_url != DATABASE_URL:
+                DATABASE_URL = nueva_url
+                try:
+                    init_db()
+                    print("[BD] ¡Base de datos PostgreSQL/Supabase inicializada con éxito tras auto-resolución!")
+                    _migrar_cuentas_locales_a_supabase()
+                    return
+                except Exception as _e2:
+                    print(f"[BD] Reintento de inicialización falló: {_e2}")
+            barra = "!" * 78
+            print(barra)
+            print("[BD] AVISO: No se pudo conectar a Supabase PostgreSQL. Se usa SQLite temporal.")
+            print(f"[BD] Error: {_pg_init_err}")
+            print(barra)
+            USING_POSTGRES = False
+            init_db()
     else:
         init_db()
+
 
 _init_db_safe()
 try:
@@ -1637,20 +1770,32 @@ def api_login():
     username, password = str(data.get("username", "")).strip(), str(data.get("password", ""))
     if data.get("terms_version") != TERMS_VERSION:
         return json_response({"status": "error", "message": "Debes aceptar los términos y condiciones vigentes."}, 400)
-    # La base de datos local de Render puede no contener cuentas antiguas (por
-    # ejemplo, tras perderse el almacenamiento local). Permitir iniciar sesión
-    # con el correo de Supabase y reconstruir el perfil local tras autenticarlo.
+
+    # 1. Buscar en la base de datos (PostgreSQL o local) por username o por email
     with db_connection() as conn:
         user = db_execute(conn,
             "SELECT * FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?) LIMIT 1",
             (username, username)).fetchone()
 
+    # Mapa de rescate para cuentas existentes creadas anteriormente en Supabase Auth
+    MAPA_USUARIOS_INICIALES = {
+        "ye-jin": "13061452@alu.murciaeduca.es",
+        "aumaysonra": "maylexh10@gmail.com",
+        "victor": "victormv901@gmail.com",
+        "victorxd": "victorxd901@gmail.com",
+        "angel": "angelflorea2012@gmail.com",
+        "mladen": "mladenvalentinov@gmail.com",
+        "rodica": "rodicastate1980@gmail.com",
+    }
+
+    # 2. Si el usuario no está aún en la tabla users:
     if not user:
-        if supabase_client is None or "@" not in username:
-            return json_response({"status": "error", "message": "No encontramos esa cuenta. Prueba con el correo con el que te registraste."}, 401)
+        target_email = username.lower() if "@" in username else MAPA_USUARIOS_INICIALES.get(username.lower())
+        if not target_email or supabase_client is None:
+            return json_response({"status": "error", "message": "No encontramos esa cuenta. Verifica tu usuario o correo."}, 401)
         try:
             sb_response = supabase_client.auth.sign_in_with_password({
-                "email": username.lower(),
+                "email": target_email,
                 "password": password,
             })
             sb_session = getattr(sb_response, "session", None)
@@ -1658,53 +1803,44 @@ def api_login():
             if not sb_session or not sb_user:
                 return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
 
-            email = (getattr(sb_user, "email", "") or username).strip().lower()
+            email = (getattr(sb_user, "email", "") or target_email).strip().lower()
             metadata = getattr(sb_user, "user_metadata", {}) or {}
-            suggested_username = str(metadata.get("username", "")).strip()
+            suggested_username = str(metadata.get("username") or metadata.get("display_name") or metadata.get("full_name") or username).strip()
             if not re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", suggested_username):
-                suggested_username = re.sub(r"[^A-Za-z0-9_.-]", "_", email.split("@", 1)[0])[:32]
+                suggested_username = username if re.fullmatch(r"[A-Za-z0-9_.-]{3,32}", username) else re.sub(r"[^A-Za-z0-9_.-]", "_", email.split("@", 1)[0])[:32]
             if len(suggested_username) < 3:
                 suggested_username = "usuario"
 
             token = new_session_token()
             now_str = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             with db_connection() as conn:
-                # Si otra solicitud ya creó el perfil, reutilizarlo.
                 user = db_execute(conn, "SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
                 if not user:
-                    candidate = suggested_username[:32]
-                    suffix = 1
-                    while db_execute(conn, "SELECT id FROM users WHERE LOWER(username) = LOWER(?)", (candidate,)).fetchone():
-                        candidate = f"{suggested_username[:27]}_{suffix}"
-                        suffix += 1
-                    try:
-                        db_execute(conn,
-                            "INSERT INTO users (username, email, password_hash, session_token, email_verified, terms_accepted_at, terms_version, tts_provider) VALUES (?, ?, ?, ?, 1, ?, ?, 'gemini')",
-                            (candidate, email, hash_password(password), token, now_str, TERMS_VERSION))
-                    except INTEGRITY_ERRORS:
-                        user = db_execute(conn, "SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
-                    if not user:
-                        user = db_execute(conn, "SELECT * FROM users WHERE session_token = ?", (token,)).fetchone()
+                    db_execute(conn,
+                        "INSERT INTO users (username, email, password_hash, session_token, email_verified, terms_accepted_at, terms_version, tts_provider) VALUES (?, ?, ?, ?, 1, ?, ?, 'gemini')",
+                        (suggested_username, email, hash_password(password), token, now_str, TERMS_VERSION))
+                    user = db_execute(conn, "SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email,)).fetchone()
                 else:
                     db_execute(conn, "UPDATE users SET session_token = ?, terms_accepted_at = ?, terms_version = ? WHERE id = ?",
                                (token, now_str, TERMS_VERSION, user["id"]))
                     user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+
             if not user:
                 return json_response({"status": "error", "message": "No se pudo preparar tu perfil. Inténtalo de nuevo."}, 500)
             set_session_cookie(user["session_token"], persistent=data.get("remember_session") is True)
-            print(f"[Supabase] Perfil local recuperado al iniciar sesión: {email}")
+            print(f"[Supabase] Perfil sincronizado y guardado en Supabase: {email} (usuario: {user['username']})")
             return json_response({"status": "ok", "profile": public_profile(user), "supabase_access_token": sb_session.access_token})
         except Exception as sb_err:
-            print(f"[Supabase] No se pudo iniciar sesión para {username}: {sb_err}")
+            print(f"[Supabase] Error en login para {username}: {sb_err}")
             return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
 
-    # Las cuentas confirmadas anteriormente mediante enlace podían haberse
-    # creado localmente con una contraseña aleatoria. Si la contraseña local
-    # no coincide, validarla con Supabase y sincronizar el hash solo si Supabase
-    # confirma que es correcta.
+    # 3. Si el usuario ya está en la tabla users:
     supabase_access_token = None
-    if not verify_password(password, user["password_hash"]):
-        if supabase_client is None:
+    pass_ok = verify_password(password, user["password_hash"]) if user["password_hash"] else False
+
+    # Si el hash local no coincide, validar con Supabase Auth si tiene email
+    if not pass_ok:
+        if supabase_client is None or not user["email"]:
             return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
         try:
             sb_response = supabase_client.auth.sign_in_with_password({
@@ -1715,24 +1851,26 @@ def api_login():
             if not sb_session:
                 return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
             supabase_access_token = sb_session.access_token
+            pass_ok = True
             with db_connection() as conn:
                 db_execute(conn, "UPDATE users SET password_hash = ?, email_verified = 1 WHERE id = ?",
                            (hash_password(password), user["id"]))
                 user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
-            print(f"[Supabase] Contraseña local sincronizada para: {user['email']}")
+            print(f"[Supabase] Hash actualizado para: {user['email']}")
         except Exception as sb_err:
-            print(f"[Supabase] No se pudo validar el acceso para {user['email']}: {sb_err}")
+            print(f"[Supabase] Validación fallida para {user['email']}: {sb_err}")
             return json_response({"status": "error", "message": "Usuario o contraseña incorrectos."}, 401)
 
+    token = new_session_token()
     with db_connection() as conn:
-        token = new_session_token()
         db_execute(conn, "UPDATE users SET session_token = ?, terms_accepted_at = ?, terms_version = ? WHERE id = ?",
                    (token, time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), TERMS_VERSION, user["id"]))
         user = db_execute(conn, "SELECT * FROM users WHERE id = ?", (user["id"],)).fetchone()
+
     set_session_cookie(token, persistent=data.get("remember_session") is True)
 
-    # Inicio de sesión paralelo en Supabase Auth (si está configurado)
-    if supabase_client is not None and not supabase_access_token:
+    # Inicio de sesión paralelo en Supabase Auth si aún no se tiene token
+    if supabase_client is not None and not supabase_access_token and user["email"]:
         try:
             sb_response = supabase_client.auth.sign_in_with_password({
                 "email": user["email"],
@@ -1740,10 +1878,8 @@ def api_login():
             })
             if sb_response and getattr(sb_response, "session", None):
                 supabase_access_token = sb_response.session.access_token
-                print(f"[Supabase] Login correcto para: {user['email']}")
-        except Exception as sb_err:
-            # No bloqueamos el login local si Supabase falla
-            print(f"[Supabase] Advertencia en login: {sb_err}")
+        except Exception:
+            pass
 
     result = {"status": "ok", "profile": public_profile(user)}
     if supabase_access_token:
