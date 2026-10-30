@@ -129,34 +129,95 @@ DATABASE_URL = _raw_db_url
 
 import urllib.parse
 
+def _convertir_a_pooler_supabase(url):
+    """
+    Convierte una URL directa de Supabase (db.<ref>.supabase.co, solo IPv6)
+    al Session Pooler IPv4 (aws-0-eu-central-1.pooler.supabase.com) sin hacer
+    ninguna conexión de prueba. Evita el timeout de 4-15 s en Render.
+    Si la URL ya apunta al pooler, la devuelve sin cambios.
+    """
+    if not url or "supabase" not in url:
+        return url
+    try:
+        parsed = urllib.parse.urlparse(url)
+        hostname = parsed.hostname or ""
+        password = parsed.password or ""
+        dbname = parsed.path.lstrip("/") or "postgres"
+    except Exception:
+        return url
+
+    if "pooler.supabase.com" in hostname:
+        return url  # ya es pooler
+
+    project_ref = None
+    m = re.search(r'db\.([a-z0-9]+)\.supabase\.co', hostname)
+    if m:
+        project_ref = m.group(1)
+    elif os.environ.get("SUPABASE_URL"):
+        m_sb = re.search(r'https?://([a-z0-9]+)\.supabase\.co', os.environ["SUPABASE_URL"])
+        if m_sb:
+            project_ref = m_sb.group(1)
+
+    if not project_ref or not password:
+        return url
+
+    pass_codificado = urllib.parse.quote_plus(password)
+    usuario_pooler = f"postgres.{project_ref}"
+    nueva_url = (
+        f"postgresql://{usuario_pooler}:{pass_codificado}"
+        f"@aws-0-eu-central-1.pooler.supabase.com:5432/{dbname}?sslmode=require"
+    )
+    print(f"[BD] URL directa Supabase (IPv6) detectada -> redirigiendo al Session Pooler IPv4 (eu-central-1).")
+    print(f"[BD] Conexion: postgresql://{usuario_pooler}:***@aws-0-eu-central-1.pooler.supabase.com:5432/{dbname}")
+    return nueva_url
+
+
 def _resolver_database_url(url_inicial):
     """
-    Supabase migró las conexiones directas (db.<ref>.supabase.co) exclusivamente a IPv6.
-    Como Render y muchos servicios solo tienen IPv4, conectar a db.<ref>.supabase.co falla o se congela.
-    Esta función prueba la URL actual; si falla o es directa, prueba automáticamente los poolers IPv4
-    de Supabase (aws-0-<region>.pooler.supabase.com) buscando la región correcta donde está alojado el proyecto.
+    Supabase migro las conexiones directas (db.<ref>.supabase.co) exclusivamente a IPv6.
+    Como Render y muchos servicios solo tienen IPv4, conectar a db.<ref>.supabase.co falla.
+
+    Estrategia (sin esperas innecesarias):
+      1. Si la URL ya es un pooler, probarla directamente.
+      2. Si es URL directa, convertir al pooler eu-central-1 SIN timeout previo y probar.
+      3. Si eu-central-1 falla, probar otras regiones (cada una con timeout de 5 s).
     """
     if not url_inicial or (psycopg is None and psycopg2 is None):
         return url_inicial
 
-    # 1. Si la URL ya conecta bien, conservarla
-    try:
-        if psycopg is not None:
-            with psycopg.connect(url_inicial, prepare_threshold=None, connect_timeout=4) as test_conn:
-                with test_conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-        else:
-            with psycopg2.connect(url_inicial, connect_timeout=4) as test_conn:
-                with test_conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-        return url_inicial
-    except Exception as err_ini:
-        print(f"[BD] Aviso: la conexión inicial con PostgreSQL falló: {str(err_ini)[:160]}")
+    def _probar(url, timeout=5):
+        try:
+            if psycopg is not None:
+                with psycopg.connect(url, prepare_threshold=None, connect_timeout=timeout) as c:
+                    c.cursor().execute("SELECT 1")
+            else:
+                with psycopg2.connect(url, connect_timeout=timeout) as c:
+                    c.cursor().execute("SELECT 1")
+            return True
+        except Exception:
+            return False
 
+    parsed_ini = urllib.parse.urlparse(url_inicial)
+    hostname_ini = parsed_ini.hostname or ""
+
+    # 1. Si ya es pooler IPv4, probarlo directamente
+    if "pooler.supabase.com" in hostname_ini:
+        if _probar(url_inicial):
+            return url_inicial
+        print("[BD] Aviso: el pooler configurado no responde, buscando alternativa...")
+
+    # 2. Si es URL directa (db.<ref>.supabase.co), convertir al pooler eu-central-1 sin timeout previo
+    if "supabase" in hostname_ini and "db." in hostname_ini:
+        url_pooler_eu = _convertir_a_pooler_supabase(url_inicial)
+        if url_pooler_eu != url_inicial and _probar(url_pooler_eu):
+            print("[BD] Conexion exitosa con el Session Pooler IPv4 de Supabase (eu-central-1:5432)!")
+            return url_pooler_eu
+        if url_pooler_eu != url_inicial:
+            print("[BD] eu-central-1 no responde, probando otras regiones...")
+
+    # 3. Probar resto de regiones si lo anterior fallo
     if "supabase" not in url_inicial:
         return url_inicial
-
-    # 2. Extraer parámetros
     try:
         parsed = urllib.parse.urlparse(url_inicial)
         user = parsed.username or "postgres"
@@ -178,45 +239,37 @@ def _resolver_database_url(url_inicial):
             project_ref = m_sb.group(1)
 
     if not project_ref or not password:
+        print("[BD] No se pudo encontrar un pooler alternativo funcional.")
         return url_inicial
 
-    regiones = [
-        "eu-central-1",  # Fráncfort (Alemania)
-        "eu-west-1",     # Irlanda
-        "eu-west-3",     # París
-        "eu-west-2",     # Londres
-        "us-east-1",     # N. Virginia
-        "us-east-2",     # Ohio
-        "us-west-1",     # California
-        "sa-east-1",     # São Paulo
-        "ap-southeast-1" # Singapur
+    otras_regiones = [
+        "eu-west-1",      # Irlanda
+        "eu-west-3",      # Paris
+        "eu-west-2",      # Londres
+        "us-east-1",      # N. Virginia
+        "us-east-2",      # Ohio
+        "us-west-1",      # California
+        "sa-east-1",      # Sao Paulo
+        "ap-southeast-1", # Singapur
     ]
 
     usuario_pooler = f"postgres.{project_ref}"
     pass_codificado = urllib.parse.quote_plus(password)
     print(f"[BD] Probando poolers IPv4 de Supabase para el proyecto '{project_ref}'...")
 
-    for region in regiones:
+    for region in otras_regiones:
         host_pooler = f"aws-0-{region}.pooler.supabase.com"
         for puerto in (5432, 6543):
-            candidata = f"postgresql://{usuario_pooler}:{pass_codificado}@{host_pooler}:{puerto}/{dbname}?sslmode=require"
-            try:
-                if psycopg is not None:
-                    with psycopg.connect(candidata, prepare_threshold=None, connect_timeout=4) as conn_test:
-                        with conn_test.cursor() as cur:
-                            cur.execute("SELECT 1")
-                else:
-                    with psycopg2.connect(candidata, connect_timeout=4) as conn_test:
-                        with conn_test.cursor() as cur:
-                            cur.execute("SELECT 1")
-                print(f"[BD] ¡Conexión exitosa con Supabase a través del pooler IPv4 ({region}:{puerto})!")
+            candidata = (
+                f"postgresql://{usuario_pooler}:{pass_codificado}"
+                f"@{host_pooler}:{puerto}/{dbname}?sslmode=require"
+            )
+            if _probar(candidata):
+                print(f"[BD] Conexion exitosa con Supabase a traves del pooler IPv4 ({region}:{puerto})!")
                 return candidata
-            except Exception:
-                continue
 
     print("[BD] No se pudo encontrar un pooler alternativo funcional.")
     return url_inicial
-
 # Intentar resolver automáticamente la conexión a Supabase si es necesario
 if DATABASE_URL and (psycopg is not None or psycopg2 is not None):
     DATABASE_URL = _resolver_database_url(DATABASE_URL)
