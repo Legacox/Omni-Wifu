@@ -1210,6 +1210,19 @@
         html[data-theme="dark"] .avatar-shape { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); }
         html[data-theme="dark"] .avatar-shape span { background: rgba(242,242,247,.65); }
         html[data-theme="dark"] .avatar-shape[aria-pressed="true"] { border-color: #FF3366; }
+
+        /* --- Aviso de IA y borrado de cuenta --- */
+        .ai-note { margin-top: -4px; text-align: center; font: 600 10.5px 'Plus Jakarta Sans', sans-serif; letter-spacing: .01em; color: rgba(28,28,30,.58); text-shadow: 0 1px 0 rgba(255,255,255,.6); pointer-events: none; user-select: none; }
+        @media (max-width: 768px) {
+            .ai-note { margin-top: -2px; font-size: 10px; }
+            body.avatar-authenticated .theme-toggle-btn { bottom: calc(172px + env(safe-area-inset-bottom, 0px)); }
+        }
+        .account-edit-body .account-row + .profile-label { display: block; margin-top: 12px; }
+        .account-danger { background: #c92350; }
+        .account-danger:hover { background: #8f1535; }
+        html[data-theme="dark"] .ai-note { color: rgba(235,235,245,.55); text-shadow: none; }
+        html[data-theme="dark"] .account-danger { background: #FF3366; color: #fff; }
+        html[data-theme="dark"] .account-danger:hover { background: #d92a56; color: #fff; }
     </style>
     <script type="importmap">
         {
@@ -1325,6 +1338,19 @@
                 <div class="profile-notice" id="account-notice" role="status"></div>
             </div>
         </details>
+        <details class="profile-section account-edit" id="account-data">
+            <summary>Mis datos y cuenta</summary>
+            <div class="account-edit-body">
+                <p class="profile-help">Puedes descargar una copia de tus datos o eliminar tu cuenta. Al eliminarla se borran tu perfil y tus claves guardadas, y no se puede deshacer.</p>
+                <div class="account-row"><button class="account-save" id="account-export-btn" type="button">Descargar mis datos</button></div>
+                <label class="profile-label" for="account-delete-confirm">Eliminar cuenta: escribe tu nombre de usuario para confirmar</label>
+                <div class="account-row">
+                    <input class="profile-input" id="account-delete-confirm" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tu nombre de usuario">
+                    <button class="account-save account-danger" id="account-delete-btn" type="button">Eliminar</button>
+                </div>
+                <div class="profile-notice" id="account-data-notice" role="status"></div>
+            </div>
+        </details>
         <div class="profile-section">
             <label class="profile-label" for="tts-provider-select">Motor de voz</label>
             <select class="profile-select" id="tts-provider-select">
@@ -1404,7 +1430,7 @@
             <label class="profile-label" id="auth-password-label" for="auth-password">Contraseña</label>
             <input class="profile-input" id="auth-password" type="password" autocomplete="current-password" required minlength="8" placeholder="Mínimo 8 caracteres">
             <div class="auth-extra" id="terms-accept-row">
-                <label class="auth-check"><input id="terms-accept" type="checkbox" required><span>He leído y acepto los términos del servicio. <a class="auth-link" id="terms-open">Consulta la política de privacidad y cookies.</a></span></label>
+                <label class="auth-check"><input id="terms-accept" type="checkbox" required><span>Tengo 16 años o más y acepto los términos del servicio. <a class="auth-link" id="terms-open">Consulta la política de privacidad, cookies y créditos.</a></span></label>
             </div>
             <div class="auth-extra" id="verification-fields" hidden>
                 <div id="supabase-link-notice" style="text-align:center;padding:12px 4px 4px;line-height:1.55;">
@@ -1430,19 +1456,28 @@
     </div>
     <div class="terms-dialog" id="terms-dialog" role="dialog" aria-modal="true" aria-labelledby="terms-title">
         <article class="terms-card"><button class="terms-close" id="terms-close" type="button" aria-label="Cerrar">&times;</button>
-            <h2 id="terms-title">Términos, privacidad y cookies · Omni Wifu</h2>
-            <p><strong>Versión 10/10/2026.</strong> Al crear una cuenta aceptas los términos del servicio. La información de privacidad se facilita para que sepas qué datos usa la aplicación; las cookies opcionales se gestionan por separado en el panel «Cookies».</p>
-            <h3>1. Servicio</h3><p>Omni Wifu ofrece una experiencia conversacional con personajes virtuales, generación de respuestas y síntesis de voz. Es un proyecto de entretenimiento; las respuestas pueden ser inexactas y no sustituyen asesoramiento profesional.</p>
-            <h3>2. Uso responsable</h3><p>Debes proporcionar datos de cuenta correctos, mantener la confidencialidad de tu contraseña y no usar el servicio para actividades ilícitas, perjudiciales o que vulneren derechos de terceros. El titular puede limitar cuentas ante abusos o riesgos de seguridad, de acuerdo con la normativa aplicable.</p>
-            <h3>3. Cuenta y credenciales</h3><p>Se guarda el nombre de usuario, el correo verificado, una huella criptográfica de la contraseña, el identificador de sesión y las preferencias de voz. Las claves de Gemini y Fish Audio que introduzcas se guardan asociadas a tu cuenta y se usan para prestar las funciones que elijas. No introduzcas datos sensibles en el chat ni en las claves.</p>
-            <h3>4. Privacidad y uso de datos</h3><p>Se tratan los datos de cuenta (nombre, correo, contraseña almacenada como hash criptográfico), identificador de sesión, preferencias, claves API guardadas en el perfil y contenido que escribas para generar respuestas y voz. La gestión de la cuenta y la prestación solicitada se vinculan a la relación de servicio; la seguridad del servicio puede basarse en el interés legítimo del titular. La cookie de 30 días solo se usa si la aceptas. El titular debe confirmar y documentar las bases jurídicas definitivas.</p><p>Para el registro y la verificación del correo se utiliza Supabase. Los mensajes se envían a Google Gemini para generar respuestas; el texto de voz se procesa con Fish Audio, Google Gemini o Edge TTS, según la configuración. El servidor de la aplicación puede estar alojado en Render. Según la información facilitada por el titular, la base de datos está en Frankfurt (Alemania). La página carga fuentes de Google Fonts y bibliotecas de JavaScript desde jsDelivr; al descargarlas, esos proveedores reciben datos técnicos de conexión como la dirección IP y el navegador. La región del servidor de aplicación, las transferencias internacionales, la relación jurídica y las condiciones de cada proveedor deben confirmarse según la configuración y los contratos activos.</p>
-            <p>Las claves API se transmiten al proveedor correspondiente cuando solicitas una función. Evita escribir información especialmente sensible. La aplicación no ofrece actualmente un control de usuario para descargar o borrar una cuenta; las solicitudes de derechos deben dirigirse al responsable, cuyos datos de contacto deben publicarse en esta página antes de ofrecer el servicio. El titular debe definir y comunicar los plazos de conservación y el procedimiento de supresión de cuentas. Si el servicio se ofrece a menores, debe completarse la información y las medidas aplicables antes de permitir su registro.</p>
-            <h3>4 bis. Ubicación</h3><p>La ubicación solo se solicita al navegador cuando preguntas por el tiempo o por dónde estás, y solo si la autorizas. No se guarda en nuestra base de datos. Las coordenadas se usan para consultar el nombre del lugar (OpenStreetMap Nominatim) y el tiempo (Open-Meteo); a la IA solo se le envía el nombre del lugar y el tiempo, no las coordenadas. Puedes revocar el permiso en los ajustes del sitio de tu navegador.</p><h3>5. Cookies y almacenamiento local</h3><p>La cookie propia <code>omni_wifu_session</code> autentica tu cuenta. Es HttpOnly y SameSite=Lax; se marca como Secure cuando el sitio se sirve por HTTPS. Si rechazas las cookies opcionales, dura solo la sesión del navegador. Si aceptas «Recordar mi inicio de sesión», dura hasta 30 días. El código de la aplicación no integra herramientas de analítica ni publicidad. La preferencia se guarda en el almacenamiento local del navegador para recordar tu elección y puedes cambiarla con el botón «Cookies» de la esquina inferior izquierda.</p>
-            <p>El almacenamiento de elección usa la clave local <code>nino_cookie_consent</code> e incluye la preferencia, versión y fecha de elección; se conserva durante seis meses y después se vuelve a preguntar. La cookie técnica es necesaria para el inicio de sesión que solicitas; la persistencia de 30 días es opcional y solo se activa tras aceptarla. Puedes retirar esa elección en cualquier momento desde «Cookies»; al rechazarla, la sesión actual pasa a ser de navegador.</p>
-            <h3>6. Conservación y derechos</h3><p>El perfil y las claves permanecen asociados a la cuenta hasta que se eliminen conforme a un procedimiento que debe publicar el responsable. Las conversaciones se mantienen en memoria del servidor durante su ejecución y pueden enviarse a los proveedores descritos para generar la respuesta o la voz. Para ejercer los derechos de acceso, rectificación, supresión, oposición, limitación o portabilidad, o reclamar ante la AEPD, deben facilitarse aquí los datos y el canal de contacto del responsable.</p>
-            <h3>7. Responsable y contacto</h3><p>Contacto para consultas de privacidad y ejercicio de derechos: <a href="mailto:angeljapon2012@gmail.com">angeljapon2012@gmail.com</a>. Sitio web: <a href="https://omni-wifu-46do.onrender.com/" target="_blank" rel="noopener noreferrer">https://omni-wifu-46do.onrender.com/</a>. La base de datos está en Frankfurt (Alemania), según la información facilitada por el titular.</p><p><strong>Información aún pendiente del titular:</strong> nombre legal o razón social, domicilio postal, forma jurídica y NIF si corresponden, y datos registrales cuando sean exigibles. También se debe confirmar la región del servidor de aplicación, los proveedores activos, sus contratos, posibles transferencias internacionales y los plazos de conservación. Estos datos deben completarse antes de considerar el aviso legal listo para publicación.</p>
-            <h3>8. Disponibilidad y responsabilidad</h3><p>El servicio puede cambiar, interrumpirse o contener errores. Estas condiciones no limitan los derechos irrenunciables que reconozca la normativa aplicable ni excluyen responsabilidades que legalmente no puedan limitarse.</p>
-            <h3>9. Cambios</h3><p>Se publicará la fecha de actualización de estas condiciones y, cuando corresponda, se solicitará de nuevo la aceptación de los términos. Los consentimientos opcionales se pueden retirar en cualquier momento desde el panel de cookies.</p>
+            <h2 id="terms-title">Términos, privacidad, cookies y créditos · Omni Wifu</h2>
+            <p><strong>Versión 29/10/2026.</strong> Al crear una cuenta aceptas estos términos. Omni Wifu es un proyecto personal, gratuito, sin publicidad y sin ánimo de lucro. Las cookies opcionales se gestionan por separado en el panel «Cookies».</p>
+            <h3>1. Qué es Omni Wifu y qué debes saber</h3><p>Omni Wifu ofrece una experiencia conversacional con personajes virtuales. <strong>Estás hablando con una inteligencia artificial</strong>: las respuestas y las voces las genera una IA, y los personajes no son personas reales. Es un servicio de entretenimiento; las respuestas pueden ser inexactas y no sustituyen el asesoramiento profesional ni la ayuda en una emergencia. Si necesitas ayuda urgente llama al 112; si estás pasando un mal momento, la línea 024 atiende la conducta suicida en España las 24 horas.</p>
+            <h3>2. Edad mínima y uso responsable</h3><p>El servicio está pensado para personas de 16 años o más. Debes proporcionar datos de cuenta correctos, mantener la confidencialidad de tu contraseña y no usar el servicio para actividades ilícitas o perjudiciales, para acosar a otras personas, para generar contenido sexual que implique a menores ni para vulnerar derechos de terceros. El titular puede limitar o cerrar cuentas ante abusos o riesgos de seguridad.</p>
+            <h3>3. Cuenta y claves API</h3><p>Se guarda el nombre de usuario, el correo verificado, una huella criptográfica de la contraseña, el identificador de sesión y tus preferencias (voz, chat, avatar). Las claves de los proveedores de IA y de voz que introduzcas se guardan asociadas a tu cuenta y solo se usan para prestar las funciones que elijas. No introduzcas datos sensibles en el chat ni en las claves.</p>
+            <h3>4. Datos que se tratan y para qué</h3><p>Se tratan los datos de cuenta (nombre de usuario, correo, huella de la contraseña), el identificador de sesión, tus preferencias, las claves API guardadas y el texto que escribes para generar respuestas y voz. Las bases jurídicas son la prestación del servicio que solicitas (art. 6.1.b RGPD), el interés legítimo en mantener la seguridad del servicio (art. 6.1.f) y tu consentimiento para la cookie opcional de 30 días (art. 6.1.a). No se venden datos ni se usan para publicidad o analítica.</p>
+            <p>Proveedores que intervienen: Supabase (registro, verificación del correo y base de datos, alojada en Frankfurt, Alemania), Render (alojamiento de la aplicación), Google Gemini (respuestas y voz), Fish Audio y Microsoft Edge TTS (voz) y los proveedores de IA que elijas con tu propia clave (por ejemplo Groq, Mistral, Anthropic, OpenAI o DeepSeek), que reciben el texto del chat cuando usas sus funciones. La página carga fuentes de Google Fonts y bibliotecas de jsDelivr, que reciben datos técnicos de conexión como la dirección IP y el navegador. Algunos de estos proveedores pueden tratar datos fuera del Espacio Económico Europeo con las garantías que cada uno ofrece en sus condiciones (por ejemplo, cláusulas contractuales tipo).</p>
+            <h3>4 bis. Ubicación</h3><p>La ubicación solo se solicita al navegador cuando preguntas por el tiempo o por dónde estás, y solo si la autorizas. No se guarda en nuestra base de datos. Las coordenadas se usan para consultar el nombre del lugar (OpenStreetMap Nominatim) y el tiempo (Open-Meteo); a la IA solo se le envía el nombre del lugar y el tiempo, no las coordenadas. Puedes revocar el permiso en los ajustes del sitio de tu navegador.</p>
+            <h3>5. Cookies y almacenamiento local</h3><p>La cookie propia <code>omni_wifu_session</code> autentica tu cuenta. Es HttpOnly y SameSite=Lax; se marca como Secure cuando el sitio se sirve por HTTPS. Si rechazas las cookies opcionales, dura solo la sesión del navegador. Si aceptas «Recordar mi inicio de sesión», dura hasta 30 días. No se usan herramientas de analítica ni de publicidad.</p>
+            <p>En el almacenamiento local de tu navegador se guardan solo preferencias técnicas que no se envían al servidor ni sirven para rastrearte: tu elección de cookies (<code>nino_cookie_consent</code>, seis meses), el modo claro u oscuro (<code>omni-theme</code>) y si ya viste el tutorial. Puedes cambiar tu elección de cookies en cualquier momento con el botón «Cookies» del perfil; al rechazar la persistencia, la sesión actual pasa a ser de navegador.</p>
+            <h3>6. Conservación y tus derechos</h3><p>Tus datos de cuenta se conservan mientras tu cuenta exista. Desde <strong>Perfil → Mis datos y cuenta</strong> puedes descargar una copia de tus datos y eliminar tu cuenta cuando quieras: al eliminarla se borran tu perfil y tus claves guardadas, y se intenta borrar también el registro de verificación del correo en Supabase. Las conversaciones solo se guardan en la memoria temporal del servidor (hasta 40 mensajes por personaje) y se pierden al reiniciarse; no se almacenan en la base de datos, aunque el texto se envía a los proveedores indicados para generar la respuesta y la voz.</p>
+            <p>Puedes ejercer tus derechos de acceso, rectificación, supresión, oposición, limitación y portabilidad escribiendo al correo de contacto, y reclamar ante la Agencia Española de Protección de Datos (<a href="https://www.aepd.es" target="_blank" rel="noopener noreferrer">aepd.es</a>).</p>
+            <h3>7. Titular y contacto</h3><p>Omni Wifu es un proyecto personal a cargo de Ángel (persona física). Contacto para consultas, solicitudes de privacidad y retirada de contenidos: <a href="mailto:angeljapon2012@gmail.com">angeljapon2012@gmail.com</a>. Sitio web: <a href="https://omni-wifu-46do.onrender.com/" target="_blank" rel="noopener noreferrer">https://omni-wifu-46do.onrender.com/</a>. Si en el futuro se ofrecen donaciones o suscripciones, se completarán aquí los datos fiscales del titular y estas condiciones.</p>
+            <h3>8. Personajes y proyecto de aficionados</h3><p>Omni Wifu es un proyecto de aficionados, no comercial y sin relación con los titulares de los personajes, que no lo patrocinan ni respaldan. Los personajes pertenecen a sus respectivos titulares. Las voces son voces sintéticas generadas con IA y no son las voces originales de los personajes ni de sus intérpretes. Si un titular de derechos solicita retirar un personaje, modelo o voz, se retirará.</p>
+            <h3>9. Créditos y licencias</h3>
+            <p><strong>Nino Nakano:</strong> personaje de «Gotoubun no Hanayome» (Las Quintillizas), © Negi Haruba / Kodansha. Modelo 3D de <strong>Nnoper</strong> (VRoid Hub), usado según las condiciones publicadas por su autora o autor.</p>
+            <p><strong>Hatsune Miku:</strong> Hatsune Miku, © Crypton Future Media, Inc. 2007 (<a href="https://piapro.net/" target="_blank" rel="noopener noreferrer">piapro.net</a>), licensed under a CC BY-NC: <a href="https://creativecommons.org/licenses/by-nc/3.0/" target="_blank" rel="noopener noreferrer">https://creativecommons.org/licenses/by-nc/3.0/</a>. Este servicio presenta una adaptación del personaje. Modelo 3D de <strong>Anna</strong> (VRoid Hub).</p>
+            <p><strong>Luna y Mia:</strong> modelos de muestra de VRoid Studio (pixiv Inc.), con modificaciones.</p>
+            <p><strong>Voces (Fish Audio):</strong> voces de la comunidad «Hatsune Miku», de @Emilia, y «Nino nakano», de @Jonatnan Bazan.</p>
+            <p><strong>Otros:</strong> animaciones de Mixamo (Adobe), three.js (licencia MIT), @pixiv/three-vrm (licencia MIT) y fuentes de Google Fonts.</p>
+            <h3>10. Disponibilidad y responsabilidad</h3><p>El servicio puede cambiar, interrumpirse o contener errores. Estas condiciones no limitan los derechos irrenunciables que reconozca la normativa aplicable ni excluyen responsabilidades que legalmente no puedan limitarse.</p>
+            <h3>11. Cambios</h3><p>Se publicará la fecha de actualización de estas condiciones y, cuando los cambios sean relevantes, se pedirá de nuevo la aceptación. Los consentimientos opcionales se pueden retirar en cualquier momento desde el panel de cookies.</p>
         </article>
     </div>
 
@@ -1553,6 +1588,7 @@
             </div>
             <button class="glass-mic-btn" id="mic-btn" title="Hablar por micrófono">🎤</button>
         </div>
+        <div class="ai-note" id="ai-note">Personaje virtual · las respuestas y la voz las genera una IA</div>
     </div>
 
     <script type="module">
@@ -3965,6 +4001,58 @@
         document.querySelectorAll('.avatar-swatch').forEach(b => b.addEventListener('click', () => saveAvatar({ color: b.dataset.color, shape: avatarStyle.shape })));
         document.querySelectorAll('.avatar-shape').forEach(b => b.addEventListener('click', () => saveAvatar({ color: avatarStyle.color, shape: b.dataset.shape })));
 
+        // ── Descargar mis datos y eliminar la cuenta ──
+        const accountExportBtn = document.getElementById('account-export-btn');
+        const accountDeleteBtn = document.getElementById('account-delete-btn');
+        const accountDeleteInput = document.getElementById('account-delete-confirm');
+        const accountDataNotice = document.getElementById('account-data-notice');
+        function setDataNotice(text, isError) {
+            accountDataNotice.textContent = text || '';
+            accountDataNotice.classList.toggle('error', !!isError);
+        }
+        accountExportBtn.addEventListener('click', async () => {
+            accountExportBtn.disabled = true;
+            setDataNotice('Preparando la descarga…');
+            try {
+                const res = await fetch('/api/account/export', { credentials: 'same-origin' });
+                if (res.status === 401) { showAuth(); return; }
+                if (!res.ok) throw new Error('No se pudo preparar la descarga.');
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'omni-wifu-mis-datos.json';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1500);
+                setDataNotice('Descarga lista ✓');
+            } catch (error) {
+                setDataNotice(error.message || 'No se pudo conectar con el servidor.', true);
+            } finally {
+                accountExportBtn.disabled = false;
+            }
+        });
+        accountDeleteBtn.addEventListener('click', async () => {
+            const typed = accountDeleteInput.value.trim();
+            if (!typed) { setDataNotice('Escribe tu nombre de usuario para confirmar.', true); return; }
+            if (!window.confirm('¿Seguro que quieres eliminar tu cuenta? Se borrarán tu perfil y tus claves guardadas y no se puede deshacer.')) return;
+            accountDeleteBtn.disabled = true;
+            setDataNotice('Eliminando…');
+            try {
+                const { res, data } = await apiFetch('/api/account/delete', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: typed })
+                });
+                if (res.status === 401) { showAuth(); return; }
+                if (!res.ok || data.status !== 'ok') throw new Error(data.message || 'No se pudo eliminar la cuenta.');
+                setDataNotice('Cuenta eliminada. Hasta pronto 👋');
+                setTimeout(() => window.location.reload(), 1200);
+            } catch (error) {
+                setDataNotice(error.message || 'No se pudo conectar con el servidor.', true);
+                accountDeleteBtn.disabled = false;
+            }
+        });
+
         function fillProfile(nextProfile) {
             profile = nextProfile;
             profileUsername.textContent = nextProfile.username;
@@ -4197,7 +4285,7 @@
                 const endpoint = authStep === 'verify' ? '/api/verify-email' : `/api/${authMode}`;
                 const payload = authStep === 'verify'
                     ? { email: authEmail.value.trim(), code: authCode.value.trim(), remember_session: cookieConsent?.rememberLogin === true }
-                    : { username: authUsername.value.trim(), password: authPassword.value, terms_version: '2026-10-10', remember_session: cookieConsent?.rememberLogin === true, ...(authMode === 'register' ? { email: authEmail.value.trim() } : {}) };
+                    : { username: authUsername.value.trim(), password: authPassword.value, terms_version: '2026-10-29', remember_session: cookieConsent?.rememberLogin === true, ...(authMode === 'register' ? { email: authEmail.value.trim() } : {}) };
                 const { res, data } = await apiFetch(endpoint, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)

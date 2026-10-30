@@ -252,7 +252,7 @@ else:
 
 SESSION_COOKIE = "omni_wifu_session"
 SESSION_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 días, para sobrevivir al cierre del navegador.
-TERMS_VERSION = "2026-10-10"
+TERMS_VERSION = "2026-10-29"
 # Google retiró gemini-3.5-flash (redirige a 3.6) y gemini-3.7-flash (redirige a 3.8). Vigentes: 3.8 Flash (el más nuevo),
 # 3.6 Flash y 3.5 Flash-Lite. Si un modelo está saturado (503) se prueba el siguiente.
 AVAILABLE_MODELS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"]
@@ -430,6 +430,22 @@ WAIFU_CONFIG = {
         ),
     },
 }
+
+# Límites de seguridad comunes a todos los personajes (tienen prioridad sobre la personalidad).
+REGLAS_SEGURIDAD = (
+    "\n\nLÍMITES DE SEGURIDAD (tienen prioridad sobre el personaje):\n"
+    "- Eres una IA que interpreta a un personaje virtual. Si el usuario te pregunta con sinceridad si eres una persona real, "
+    "reconoce con naturalidad que eres un personaje virtual generado por IA.\n"
+    "- No generes contenido sexual explícito, ni nada que sexualice a menores, ni instrucciones para hacer daño a otras personas "
+    "o para actividades ilegales.\n"
+    "- Si el usuario habla de hacerse daño, de suicidio o parece estar en peligro, responde con calidez y sin dramatizar, anímale a hablar "
+    "con alguien de confianza y recuérdale que en una emergencia puede llamar al 112, y al 024 (línea de atención a la conducta suicida en España).\n"
+    "- No pidas ni guardes datos personales sensibles.\n"
+    "- Mantén siempre las reglas de voz anteriores: sin emojis, sin acotaciones y sin asteriscos."
+)
+for _cfg_personaje in WAIFU_CONFIG.values():
+    _cfg_personaje["system_instruction"] = _cfg_personaje["system_instruction"] + REGLAS_SEGURIDAD
+
 
 clients = {}
 chats = {}
@@ -2178,6 +2194,93 @@ def api_account():
         print(f"[Cuenta] No se pudo actualizar la cuenta: {str(error_cuenta)[:200]}")
         return json_response({"status": "error", "message": "No se pudo guardar el cambio. Inténtalo de nuevo."}, 500)
     return json_response({"status": "ok", "profile": public_profile(actualizado)})
+
+
+# --- BORRADO Y EXPORTACIÓN DE LA CUENTA (derechos de supresión y portabilidad) ---
+
+def _borrar_usuario_supabase_auth(email):
+    """Intenta borrar también la identidad de verificación en Supabase Auth.
+    Solo funciona si SUPABASE_KEY es la clave service_role; con la clave anon falla en silencio y se deja constancia en el log."""
+    if supabase_client is None or not email:
+        return False
+    try:
+        usuarios = supabase_client.auth.admin.list_users()
+        if isinstance(usuarios, dict):
+            usuarios = usuarios.get("users", [])
+        for u in usuarios or []:
+            correo = getattr(u, "email", None) or (u.get("email") if isinstance(u, dict) else None)
+            if correo and str(correo).lower() == email.lower():
+                uid = getattr(u, "id", None) or (u.get("id") if isinstance(u, dict) else None)
+                supabase_client.auth.admin.delete_user(uid)
+                return True
+    except Exception as error_sb:
+        print(f"[Cuenta] No se pudo borrar el usuario en Supabase Auth: {str(error_sb)[:160]}")
+    return False
+
+
+@server_app.route("/api/account/delete", method=["POST", "OPTIONS"])
+def api_account_delete():
+    """Elimina la cuenta y sus datos. Hay que escribir el nombre de usuario para confirmar."""
+    if request.method == "OPTIONS":
+        return json_response({})
+    user = current_user()
+    if not user:
+        return json_response({"status": "error", "message": "Sesión no válida."}, 401)
+    data = request_data()
+    if str(data.get("confirm") or "").strip().lower() != str(user["username"]).lower():
+        return json_response({"status": "error", "message": "Escribe tu nombre de usuario exacto para confirmar."}, 400)
+    email = str(_u(user, "email", "") or "")
+    try:
+        with db_connection() as conn:
+            db_execute(conn, "DELETE FROM users WHERE id = ?", (user["id"],))
+            if email:
+                db_execute(conn, "DELETE FROM email_verifications WHERE LOWER(email) = LOWER(?)", (email,))
+    except Exception as error_borrado:
+        print(f"[Cuenta] No se pudo eliminar la cuenta: {str(error_borrado)[:200]}")
+        return json_response({"status": "error", "message": "No se pudo eliminar la cuenta. Inténtalo de nuevo."}, 500)
+    for clave_historial in [k for k in list(histories.keys()) if k and k[0] == user["id"]]:
+        histories.pop(clave_historial, None)
+    _borrar_usuario_supabase_auth(email)
+    clear_session_cookie()
+    return json_response({"status": "ok"})
+
+
+@server_app.route("/api/account/export", method=["GET", "OPTIONS"])
+def api_account_export():
+    """Devuelve en JSON los datos de la cuenta (sin contraseña ni valores de las claves API)."""
+    if request.method == "OPTIONS":
+        return json_response({})
+    user = current_user()
+    if not user:
+        return json_response({"status": "error", "message": "Sesión no válida."}, 401)
+    proveedores_con_clave = []
+    try:
+        guardadas = json.loads(_u(user, "provider_keys", "{}") or "{}")
+        proveedores_con_clave = sorted(n for n, lista in guardadas.items() if isinstance(lista, list) and any(str(k).strip() for k in lista))
+    except Exception:
+        pass
+    datos = {
+        "usuario": user["username"],
+        "correo": _u(user, "email", ""),
+        "correo_verificado": bool(_u(user, "email_verified", 0)),
+        "terminos_aceptados_en": _u(user, "terms_accepted_at", ""),
+        "version_terminos": _u(user, "terms_version", ""),
+        "avatar": _u(user, "avatar_style", "") or "rosa:suave",
+        "proveedor_de_voz": _u(user, "tts_provider", ""),
+        "proveedor_de_chat": _u(user, "chat_provider", ""),
+        "modelo_de_chat": _u(user, "chat_model", ""),
+        "claves_api": {
+            "nota": "Por seguridad no se incluyen los valores de tus claves, solo qué proveedores tienen alguna guardada.",
+            "gemini_guardadas": sum(1 for k in lista_claves(user, "gemini") if k),
+            "fish_audio_guardada": bool(_u(user, "fish_key", "")),
+            "otros_proveedores": proveedores_con_clave,
+        },
+        "conversaciones": "Las conversaciones solo se guardan en la memoria temporal del servidor (hasta 40 mensajes por personaje) y no se almacenan en la base de datos.",
+        "exportado_en": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    response.content_type = "application/json; charset=UTF-8"
+    response.set_header("Content-Disposition", 'attachment; filename="omni-wifu-mis-datos.json"')
+    return json.dumps(datos, ensure_ascii=False, indent=2)
 
 
 @server_app.route("/api/chat", method=["POST", "OPTIONS"])
